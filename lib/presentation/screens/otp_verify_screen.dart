@@ -192,7 +192,7 @@ class OtpVerifyScreen extends StatelessWidget {
                             context,
                             otp: viewModel.otpCode,
                             onSuccess: () {
-                              context.goNamed(RouteNames.home);
+                              context.goNamed(RouteNames.userRegistration);
                             },
                           );
                         },
