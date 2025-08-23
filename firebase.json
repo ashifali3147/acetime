@@ -1,0 +1,30 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "acetime-flutter",
+          "appId": "1:734447669747:android:135d02e5a5963718f8c286",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "acetime-flutter",
+          "appId": "1:734447669747:ios:4276fc8d5e2bee91f8c286",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "acetime-flutter",
+          "configurations": {
+            "android": "1:734447669747:android:135d02e5a5963718f8c286",
+            "ios": "1:734447669747:ios:4276fc8d5e2bee91f8c286"
+          }
+        }
+      }
+    }
+  }
+}
