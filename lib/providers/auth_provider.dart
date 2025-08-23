@@ -153,16 +153,6 @@ class AuthProvider extends ChangeNotifier {
       otp: otp,
       onSuccess: () {
         isLoginVerifyPageLoading = false;
-        //TODO:: need to check here
-        // getUserDataAfterLogin(
-        //   StorageHelper().getFCMToken(),
-        //   onSuccess: () {
-        //     onSuccess?.call();
-        //   },
-        //   onError: (message) {
-        //     Utils.showSnackBar(context, message: message);
-        //   },
-        // );
         onSuccess?.call();
       },
       onFailure: () {
