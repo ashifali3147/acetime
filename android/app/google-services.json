@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "734447669747",
+    "project_id": "acetime-flutter",
+    "storage_bucket": "acetime-flutter.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:734447669747:android:135d02e5a5963718f8c286",
+        "android_client_info": {
+          "package_name": "com.tlw.acetime.acetime"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBfIUcIKcGRm2mzHqWnnY1MTj1wakPaSqE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
