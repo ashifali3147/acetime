@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:acetime/presentation/widget/app_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -37,14 +38,7 @@ class _SplashScreenState extends State<SplashScreen> {
           onPlay: (controller) => controller.repeat(),
           child: Padding(
             padding: const EdgeInsets.all(15.0),
-            child: Text(
-              "AceTime",
-              style: TextStyle(
-                color: Colors.deepPurpleAccent,
-                fontSize: 30,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: AppLogo(),
           ),
         ),
       ),

@@ -21,4 +21,6 @@ class Constant {
   }
 
   static const String somethingWentWrong = "Something went wrong!";
+
+  static const int resendOtpTimeLimitInSec = 120;
 }
