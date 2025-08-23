@@ -36,4 +36,29 @@ class Utils {
   static void hideKeyboard(BuildContext context) {
     FocusScope.of(context).unfocus();
   }
+
+  static Widget conditionalWidget({
+    required bool condition,
+    required Widget trueWidget,
+    required Widget falseWidget,
+  }) {
+    if (condition) {
+      return trueWidget;
+    } else {
+      return falseWidget;
+    }
+  }
+
+  static String formatTimeInMinSec(int totalSeconds) {
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+
+    if (minutes > 0 && seconds > 0) {
+      return '$minutes min $seconds sec';
+    } else if (minutes > 0) {
+      return '$minutes min';
+    } else {
+      return '$seconds sec';
+    }
+  }
 }
