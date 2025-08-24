@@ -57,4 +57,37 @@ class FirestoreService {
 
     return UserModel.fromMap(doc.id, doc.data()!);
   }
+
+  /// Fetch cached contacts for the current user
+  Future<List<UserModel>> getUserContacts() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return [];
+
+    final snapshot = await _firestore
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('contacts')
+        .get();
+
+    return snapshot.docs
+        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  /// Sync contacts to Firestore under current user's 'contacts' subcollection
+  Future<void> syncContactsToFirestore(List<UserModel> contacts) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final batch = _firestore.batch();
+    final userContactsRef =
+    _firestore.collection('users').doc(currentUser.uid).collection('contacts');
+
+    for (var contact in contacts) {
+      final docRef = userContactsRef.doc(contact.uid);
+      batch.set(docRef, contact.toMap());
+    }
+
+    await batch.commit();
+  }
 }

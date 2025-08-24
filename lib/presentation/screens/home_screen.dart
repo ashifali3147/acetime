@@ -42,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
         onPressed: () {
-          context.goNamed(RouteNames.contactSync);
+          context.pushNamed(RouteNames.contactSync);
         },
         backgroundColor: AppColors.themeColor,
         child: const Icon(Icons.message, color: Colors.white),

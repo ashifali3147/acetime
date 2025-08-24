@@ -1,31 +1,55 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:contacts_service_plus/contacts_service_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../model/user_model.dart';
+import '../service/firestore_service.dart';
 
 class ContactSyncProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirestoreService _firestoreService = FirestoreService();
 
   List<UserModel> _contacts = [];
   bool _isLoading = false;
   String? _error;
 
   List<UserModel> get contacts => _contacts;
+
   bool get isLoading => _isLoading;
+
   String? get error => _error;
 
-  /// Fetch contacts only if permission is granted
+  Future<void> fetchCacheContacts() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      // 1️⃣ Load cached contacts first
+      _contacts = await _firestoreService.getUserContacts();
+      notifyListeners();
+    } catch (e) {
+      _error = "Failed to fetch contacts: $e";
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Main entry point: load cached + sync
   Future<void> fetchContacts() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      // 1. Request permission
+      // 1️⃣ Load cached contacts first
+      _contacts = await _firestoreService.getUserContacts();
+      notifyListeners();
+
+      // 2️⃣ Request device contact permission
       var status = await Permission.contacts.status;
-      if (status.isDenied || status.isRestricted) {
+      if (!status.isGranted) {
         status = await Permission.contacts.request();
       }
 
@@ -36,7 +60,7 @@ class ContactSyncProvider extends ChangeNotifier {
         return;
       }
 
-      // 2. Get phone contacts
+      // 3️⃣ Get device contacts
       Iterable<Contact> phoneContacts = await ContactsService.getContacts();
       final phoneNumbers = phoneContacts
           .expand((c) => c.phones ?? [])
@@ -51,16 +75,24 @@ class ContactSyncProvider extends ChangeNotifier {
         return;
       }
 
-      // 3. Fetch users from Firestore
+      // 4️⃣ Fetch all app users from Firestore
       final snapshot = await _firestore.collection('users').get();
-
-      _contacts = snapshot.docs
+      final availableContacts = snapshot.docs
           .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .where((user) =>
-      user.phone != null &&
-          phoneNumbers.contains(user.phone!.replaceAll(RegExp(r'\D'), "")))
+          .where(
+            (user) =>
+                user.phone != null &&
+                phoneNumbers.contains(
+                  user.phone!.replaceAll(RegExp(r'\D'), ""),
+                ),
+          )
           .toList();
 
+      // 5️⃣ Update Firestore cache
+      await _firestoreService.syncContactsToFirestore(availableContacts);
+
+      // 6️⃣ Update provider state
+      _contacts = availableContacts;
     } catch (e) {
       _error = "Failed to fetch contacts: $e";
     } finally {

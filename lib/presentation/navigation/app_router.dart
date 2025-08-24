@@ -42,7 +42,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/contact-sync',
       name: RouteNames.contactSync,
-      builder: (context, state) => const ContactSyncPage(),
+      builder: (context, state) => const ContactsSyncPage(),
     ),
   ],
 );

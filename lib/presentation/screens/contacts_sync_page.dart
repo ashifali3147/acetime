@@ -2,9 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/contacts_sync_provider.dart';
 
-class ContactSyncPage extends StatelessWidget {
-  const ContactSyncPage({super.key});
+class ContactsSyncPage extends StatefulWidget {
+  const ContactsSyncPage({super.key});
 
+  @override
+  State<ContactsSyncPage> createState() => _ContactsSyncPageState();
+}
+
+class _ContactsSyncPageState extends State<ContactsSyncPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      final viewModel = Provider.of<ContactSyncProvider>(context, listen: false);
+      viewModel.fetchCacheContacts();
+    });
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -54,3 +67,4 @@ class ContactSyncPage extends StatelessWidget {
     );
   }
 }
+
