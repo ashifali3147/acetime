@@ -4,4 +4,5 @@ class RouteNames {
   static const otp = 'otp';
   static const userRegistration = 'userRegistration';
   static const home = 'home';
+  static const contactSync = 'contactSync';
 }
