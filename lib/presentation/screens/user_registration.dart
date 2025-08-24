@@ -110,8 +110,8 @@ class _UserRegistrationState extends State<UserRegistration> {
 
   void _loadUserData() async {
     final userData = await FirestoreService().getCurrentUserData();
-    if (userData != null && userData['userName'] != null) {
-      fullNameController.text = userData['userName'];
+    if (userData != null && userData.userName != null) {
+      fullNameController.text = userData.userName ?? "";
     }
   }
 }
