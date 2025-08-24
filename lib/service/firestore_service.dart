@@ -1,7 +1,7 @@
-import 'dart:ui';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import '../model/user_model.dart';
 
 class FirestoreService {
   final _firestore = FirebaseFirestore.instance;
@@ -9,7 +9,7 @@ class FirestoreService {
   Future<void> getOrCreateUser({
     required String? fcmToken,
     required String userName,
-    required VoidCallback onSuccess,
+    required Function() onSuccess,
     required Function(String) onError,
   }) async {
     try {
@@ -20,25 +20,26 @@ class FirestoreService {
       }
 
       final userRef = _firestore.collection("users").doc(user.uid);
-
       final doc = await userRef.get();
 
       if (doc.exists) {
-        // ✅ Update FCM token
+        // ✅ Update
         await userRef.update({
           "fcmToken": fcmToken,
           "userName": userName,
           "lastLogin": FieldValue.serverTimestamp(),
         });
       } else {
-        // ✅ Create new user doc
-        await userRef.set({
-          "phone": user.phoneNumber,
-          "fcmToken": fcmToken,
-          "userName": userName,
-          "createdAt": FieldValue.serverTimestamp(),
-          "lastLogin": FieldValue.serverTimestamp(),
-        });
+        // ✅ Create
+        final newUser = UserModel(
+          uid: user.uid,
+          phone: user.phoneNumber,
+          userName: userName,
+          fcmToken: fcmToken,
+          createdAt: DateTime.now(),
+          lastLogin: DateTime.now(),
+        );
+        await userRef.set(newUser.toMap());
       }
 
       onSuccess();
@@ -47,17 +48,46 @@ class FirestoreService {
     }
   }
 
-  Future<Map<String, dynamic>?> getCurrentUserData() async {
+  Future<UserModel?> getCurrentUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;
 
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-
+    final doc = await _firestore.collection('users').doc(user.uid).get();
     if (!doc.exists) return null;
-    return doc.data();
+
+    return UserModel.fromMap(doc.id, doc.data()!);
   }
 
+  /// Fetch cached contacts for the current user
+  Future<List<UserModel>> getUserContacts() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return [];
+
+    final snapshot = await _firestore
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('contacts')
+        .get();
+
+    return snapshot.docs
+        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  /// Sync contacts to Firestore under current user's 'contacts' subcollection
+  Future<void> syncContactsToFirestore(List<UserModel> contacts) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final batch = _firestore.batch();
+    final userContactsRef =
+    _firestore.collection('users').doc(currentUser.uid).collection('contacts');
+
+    for (var contact in contacts) {
+      final docRef = userContactsRef.doc(contact.uid);
+      batch.set(docRef, contact.toMap());
+    }
+
+    await batch.commit();
+  }
 }

@@ -1,4 +1,5 @@
 import 'package:acetime/presentation/navigation/route_names.dart';
+import 'package:acetime/presentation/screens/contacts_sync_page.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../utils/navigator.dart';
@@ -37,6 +38,11 @@ final GoRouter appRouter = GoRouter(
       path: '/home',
       name: RouteNames.home,
       builder: (context, state) => const HomeScreen(),
+    ),
+    GoRoute(
+      path: '/contact-sync',
+      name: RouteNames.contactSync,
+      builder: (context, state) => const ContactsSyncPage(),
     ),
   ],
 );

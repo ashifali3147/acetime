@@ -1,5 +1,6 @@
 import 'package:acetime/presentation/navigation/app_router.dart';
 import 'package:acetime/providers/auth_provider.dart';
+import 'package:acetime/providers/contacts_sync_provider.dart';
 import 'package:acetime/style/app_color.dart';
 import 'package:acetime/utils/custom_slide_page_transition_builder.dart';
 import 'package:acetime/utils/storage_helper.dart';
@@ -20,6 +21,7 @@ Future<void> main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ContactSyncProvider()),
       ],
       child: const MyApp(),
     ),

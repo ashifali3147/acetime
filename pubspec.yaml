@@ -44,6 +44,8 @@ dependencies:
   country_picker: ^2.0.27
   flutter_otp_text_field: ^1.5.1+1
   cloud_firestore: ^6.0.0
+  permission_handler: ^12.0.1
+  contacts_service_plus: ^0.0.2
 
 dev_dependencies:
   flutter_test:
