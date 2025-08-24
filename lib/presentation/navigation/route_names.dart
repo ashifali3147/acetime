@@ -5,4 +5,5 @@ class RouteNames {
   static const userRegistration = 'userRegistration';
   static const home = 'home';
   static const contactSync = 'contactSync';
+  static const chat = 'chat';
 }

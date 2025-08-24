@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../providers/contacts_sync_provider.dart';
+import '../navigation/route_names.dart';
 
 class ContactsSyncPage extends StatefulWidget {
   const ContactsSyncPage({super.key});
@@ -51,7 +53,10 @@ class _ContactsSyncPageState extends State<ContactsSyncPage> {
                   trailing: IconButton(
                     icon: const Icon(Icons.chat),
                     onPressed: () {
-                      // TODO: start chat with this user
+                      context.pushNamed(
+                        RouteNames.chat,
+                        extra: user, // pass the full UserModel
+                      );
                     },
                   ),
                 );

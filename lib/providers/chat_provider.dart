@@ -7,6 +7,8 @@ import '../model/message_model.dart';
 class ChatProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  FirebaseFirestore get firestore => _firestore;
+
   List<MessageModel> _messages = [];
   bool _isLoading = false;
 

@@ -1,4 +1,5 @@
 import 'package:acetime/presentation/navigation/route_names.dart';
+import 'package:acetime/presentation/page/recent_chats_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,7 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   final List<Widget> _pages = [
-    const ChatListPage(),
+    const RecentChatsPage(),
     const ProfilePage(),
   ];
 
@@ -65,34 +66,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Chat List Page (placeholder for now)
-class ChatListPage extends StatelessWidget {
-  const ChatListPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(10),
-      itemCount: 10,
-      itemBuilder: (context, index) {
-        return ListTile(
-          leading: const CircleAvatar(
-            backgroundColor: Colors.grey,
-            child: Icon(Icons.person, color: Colors.white),
-          ),
-          title: Text("Chat $index",
-              style: const TextStyle(color: Colors.white)),
-          subtitle: const Text("Last message...",
-              style: TextStyle(color: Colors.grey)),
-          onTap: () {
-            // TODO: Navigate to ChatScreen
-          },
-        );
-      },
     );
   }
 }
