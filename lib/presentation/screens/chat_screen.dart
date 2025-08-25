@@ -1,8 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
 import '../../model/user_model.dart';
 import '../../providers/chat_provider.dart';
 
@@ -21,9 +19,12 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    final currentUser = FirebaseAuth.instance.currentUser!;
-    chatId = context.read<ChatProvider>().getChatId(currentUser.uid, widget.receiver.uid);
-    context.read<ChatProvider>().listenMessages(chatId);
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      final currentUser = FirebaseAuth.instance.currentUser!;
+      chatId = context.read<ChatProvider>().getChatId(currentUser.uid, widget.receiver.uid);
+      context.read<ChatProvider>().listenMessages(chatId);
+      context.read<ChatProvider>().markMessagesAsSeen(chatId);
+    });
   }
 
   @override
@@ -43,7 +44,8 @@ class _ChatScreenState extends State<ChatScreen> {
               itemCount: provider.messages.length,
               itemBuilder: (context, index) {
                 final msg = provider.messages[index];
-                final isMe = msg.senderId == currentUser.uid;
+                final isMe = msg['senderId'] == currentUser.uid;
+
                 return Align(
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
@@ -53,21 +55,22 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: isMe ? Colors.blue : Colors.grey[300],
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          msg.text,
-                          style: TextStyle(color: isMe ? Colors.white : Colors.black),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          DateFormat('hh:mm a').format(msg.timestamp.toDate()),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isMe ? Colors.white70 : Colors.black54,
+                        Flexible(
+                          child: Text(
+                            msg['text'],
+                            style: TextStyle(color: isMe ? Colors.white : Colors.black),
                           ),
                         ),
+                        const SizedBox(width: 4),
+                        if (isMe)
+                          Icon(
+                            msg['seen'] ? Icons.done_all : Icons.done,
+                            size: 16,
+                            color: msg['seen'] ? Colors.blue : Colors.white70,
+                          ),
                       ],
                     ),
                   ),
@@ -92,7 +95,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   icon: const Icon(Icons.send),
                   onPressed: () {
                     if (_controller.text.trim().isEmpty) return;
-                    provider.sendMessage(chatId, _controller.text.trim());
+                    provider.sendMessage(chatId, widget.receiver, _controller.text.trim());
                     _controller.clear();
                   },
                 ),
