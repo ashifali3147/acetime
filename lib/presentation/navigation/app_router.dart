@@ -1,7 +1,9 @@
 import 'package:acetime/presentation/navigation/route_names.dart';
+import 'package:acetime/presentation/screens/chat_screen.dart';
 import 'package:acetime/presentation/screens/contacts_sync_page.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../model/user_model.dart';
 import '../../utils/navigator.dart';
 import '../screens/home_screen.dart';
 import '../screens/login_screen.dart';
@@ -43,6 +45,14 @@ final GoRouter appRouter = GoRouter(
       path: '/contact-sync',
       name: RouteNames.contactSync,
       builder: (context, state) => const ContactsSyncPage(),
+    ),
+    GoRoute(
+      path: '/chat',
+      name: RouteNames.chat,
+      builder: (context, state) {
+        final receiver = state.extra as UserModel;
+        return ChatScreen(receiver: receiver);
+      },
     ),
   ],
 );
