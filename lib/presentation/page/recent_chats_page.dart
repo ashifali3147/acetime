@@ -49,11 +49,6 @@ class RecentChatsPage extends StatelessWidget {
                 final unreadCount = chat.unreadCounts?[currentUser.uid] ?? 0;
                 final isLastMessageByMe = chat.lastMessageSenderId == currentUser.uid;
 
-                print("[ChatData] - UnreadCount ${unreadCount}");
-                print("[ChatData] - isLastMessageByMe ${isLastMessageByMe}");
-                print("[ChatData] - LastSender ${chat.lastMessageSenderId}");
-                print("[ChatData] - ME ${currentUser.uid}");
-
                 return ListTile(
                   leading: const CircleAvatar(child: Icon(Icons.person)),
                   title: Text(otherUser.userName ?? "Unknown"),
