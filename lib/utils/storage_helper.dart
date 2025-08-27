@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../model/user_model.dart';
 import 'constant.dart';
 
 class StorageHelper {
@@ -68,4 +71,33 @@ class StorageHelper {
   String getJWTToken() {
     return getStringData(Constant.jwtToken) ?? "";
   }
+
+  void setUserName(String value) {
+    saveStringData(Constant.userName, value);
+  }
+
+  String getUserName() {
+    return getStringData(Constant.userName) ?? "";
+  }
+
+  void setUserModel(UserModel user) {
+    saveStringData(Constant.userModel, jsonEncode(user.toJson()));
+  }
+
+  UserModel? getUserModel() {
+    final userJson = getStringData(Constant.userModel);
+    if (userJson == null) return null;
+
+    final map = jsonDecode(userJson) as Map<String, dynamic>;
+    return UserModel(
+      uid: map['uid'],
+      phone: map['phone'],
+      userName: map['userName'],
+      fcmToken: map['fcmToken'],
+      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : null,
+      lastLogin: map['lastLogin'] != null ? DateTime.parse(map['lastLogin']) : null,
+    );
+  }
+
+
 }

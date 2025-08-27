@@ -39,4 +39,16 @@ class UserModel {
       "lastLogin": lastLogin != null ? Timestamp.fromDate(lastLogin!) : FieldValue.serverTimestamp(),
     };
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      "uid": uid,
+      "phone": phone,
+      "userName": userName,
+      "fcmToken": fcmToken,
+      "createdAt": createdAt?.toIso8601String(),
+      "lastLogin": lastLogin?.toIso8601String(),
+    };
+  }
+
 }

@@ -2,6 +2,7 @@ import 'package:acetime/presentation/navigation/route_names.dart';
 import 'package:acetime/presentation/page/recent_chats_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../style/app_color.dart';
 
@@ -26,6 +27,19 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  @override
+  void initState() {
+    super.initState();
+    handlePermission();
+  }
+
+  Future<void> handlePermission() async {
+    await Permission.notification.isDenied.then((value) {
+      if (value) {
+        Permission.notification.request();
+      }
+    });
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(

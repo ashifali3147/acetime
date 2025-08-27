@@ -1,7 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:acetime/service/notification_service.dart';
+import 'package:acetime/utils/storage_helper.dart';
+import 'package:acetime/utils/utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../model/user_model.dart';
 
 class ChatProvider extends ChangeNotifier {
@@ -12,7 +18,7 @@ class ChatProvider extends ChangeNotifier {
 
   /// Generate a consistent chatId based on two user IDs
   String getChatId(String uid1, String uid2) {
-    return uid1.hashCode <= uid2.hashCode ? '$uid1\_$uid2' : '$uid2\_$uid1';
+    return uid1.hashCode <= uid2.hashCode ? '${uid1}_$uid2' : '${uid2}_$uid1';
   }
 
   /// Listen for messages in real-time
@@ -28,24 +34,28 @@ class ChatProvider extends ChangeNotifier {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .listen((snapshot) {
-      messages = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'id': doc.id,
-          'senderId': data['senderId'],
-          'receiverId': data['receiverId'],
-          'text': data['text'] ?? '',
-          'timestamp': data['timestamp'],
-          'seen': data['seen'] ?? false,
-        };
-      }).toList();
-      isLoading = false;
-      notifyListeners();
-    });
+          messages = snapshot.docs.map((doc) {
+            final data = doc.data();
+            return {
+              'id': doc.id,
+              'senderId': data['senderId'],
+              'receiverId': data['receiverId'],
+              'text': data['text'] ?? '',
+              'timestamp': data['timestamp'],
+              'seen': data['seen'] ?? false,
+            };
+          }).toList();
+          isLoading = false;
+          notifyListeners();
+        });
   }
 
   /// Send a message
-  Future<void> sendMessage(String chatId, UserModel receiver, String text) async {
+  Future<void> sendMessage(
+    String chatId,
+    UserModel receiver,
+    String text,
+  ) async {
     final currentUser = FirebaseAuth.instance.currentUser!;
     final messageId = DateTime.now().millisecondsSinceEpoch.toString();
     final timestamp = DateTime.now();
@@ -73,9 +83,19 @@ class ChatProvider extends ChangeNotifier {
       'lastMessageTime': Timestamp.fromDate(timestamp),
       'lastMessageSenderId': currentUser.uid,
       'unreadCounts': {
-        receiver.uid: FieldValue.increment(1)
+        receiver.uid: FieldValue.increment(1),
       }, // only increment receiver
     }, SetOptions(merge: true));
+    NotificationService().sendPushNotification(
+      deviceToken: receiver.fcmToken ?? "",
+      title: Utils.getSenderName(),
+      body: text,
+      data: {
+        'chatId': chatId,
+        // Convert the entire user JSON into a string
+        'sender': jsonEncode(StorageHelper().getUserModel()?.toJson()),
+      },
+    );
   }
 
   /// Mark all messages as seen when user opens the chat

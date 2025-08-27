@@ -1,5 +1,7 @@
+import 'package:acetime/utils/storage_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
 
 import '../model/user_model.dart';
 
@@ -29,6 +31,16 @@ class FirestoreService {
           "userName": userName,
           "lastLogin": FieldValue.serverTimestamp(),
         });
+        // Save updated user in cache
+        final cachedUser = UserModel(
+          uid: user.uid,
+          phone: doc.data()?['phone'],
+          userName: userName,
+          fcmToken: fcmToken,
+          createdAt: (doc.data()?['createdAt'] as Timestamp?)?.toDate(),
+          lastLogin: DateTime.now(),
+        );
+        StorageHelper().setUserModel(cachedUser);
       } else {
         // ✅ Create
         final newUser = UserModel(
@@ -40,8 +52,9 @@ class FirestoreService {
           lastLogin: DateTime.now(),
         );
         await userRef.set(newUser.toMap());
+        StorageHelper().setUserModel(newUser);
       }
-
+      StorageHelper().setUserName(userName);
       onSuccess();
     } catch (e) {
       onError("Something went wrong: $e");
@@ -57,6 +70,29 @@ class FirestoreService {
 
     return UserModel.fromMap(doc.id, doc.data()!);
   }
+
+  /// Update current user's FCM token in Firestore
+  Future<void> updateFcmToken({
+    required String fcmToken,
+  }) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        debugPrint("No authenticated user found");
+        return;
+      }
+
+      final userRef = _firestore.collection('users').doc(user.uid);
+
+      await userRef.update({
+        'fcmToken': fcmToken,
+        'lastLogin': FieldValue.serverTimestamp(), // optional: update lastLogin
+      });
+    } catch (e) {
+      debugPrint("Failed to update FCM token: $e");
+    }
+  }
+
 
   /// Fetch cached contacts for the current user
   Future<List<UserModel>> getUserContacts() async {

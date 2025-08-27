@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 
 import '../utils/storage_helper.dart';
+import 'firestore_service.dart';
 
 class FcmService {
   // Singleton setup
@@ -56,11 +57,12 @@ class FcmService {
     }
   }
 
-  /// (Optional) Listen for token refresh and update backend if needed
+  /// Listen for token refresh
   void listenForTokenRefresh({Function(String newToken)? onRefresh}) {
-    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
       _cachedToken = newToken;
       StorageHelper().setFCMToken(newToken);
+      await FirestoreService().updateFcmToken(fcmToken: newToken);
       onRefresh?.call(newToken);
     });
   }
