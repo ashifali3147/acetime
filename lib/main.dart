@@ -2,6 +2,7 @@ import 'package:acetime/presentation/navigation/app_router.dart';
 import 'package:acetime/providers/auth_provider.dart';
 import 'package:acetime/providers/chat_provider.dart';
 import 'package:acetime/providers/contacts_sync_provider.dart';
+import 'package:acetime/service/fcm_service.dart';
 import 'package:acetime/style/app_color.dart';
 import 'package:acetime/utils/custom_slide_page_transition_builder.dart';
 import 'package:acetime/utils/storage_helper.dart';
@@ -16,7 +17,7 @@ Future<void> main() async {
   await StorageHelper.init();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // await Constant.initConstants();
-  // FcmService().listenForTokenRefresh();
+  FcmService().listenForTokenRefresh();
   // Utils.initializeTimeZone();
   runApp(
     MultiProvider(
