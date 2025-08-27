@@ -68,4 +68,12 @@ class StorageHelper {
   String getJWTToken() {
     return getStringData(Constant.jwtToken) ?? "";
   }
+
+  void setUserName(String value) {
+    saveStringData(Constant.userName, value);
+  }
+
+  String getUserName() {
+    return getStringData(Constant.userName) ?? "";
+  }
 }

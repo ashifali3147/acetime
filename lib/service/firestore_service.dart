@@ -1,3 +1,4 @@
+import 'package:acetime/utils/storage_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
@@ -42,7 +43,7 @@ class FirestoreService {
         );
         await userRef.set(newUser.toMap());
       }
-
+      StorageHelper().setUserName(userName);
       onSuccess();
     } catch (e) {
       onError("Something went wrong: $e");

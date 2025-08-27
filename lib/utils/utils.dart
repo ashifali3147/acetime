@@ -1,3 +1,4 @@
+import 'package:acetime/utils/storage_helper.dart';
 import 'package:flutter/material.dart';
 
 class Utils {
@@ -60,5 +61,11 @@ class Utils {
     } else {
       return '$seconds sec';
     }
+  }
+
+  static String getSenderName() {
+    return StorageHelper().getUserName().isNotEmpty
+        ? StorageHelper().getUserName()
+        : "Someone";
   }
 }

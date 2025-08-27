@@ -6,6 +6,7 @@ class Constant {
   static const String isUserLogin = "IS_USER_LOGIN";
   static const String fcmToken = "FCM_TOKEN";
   static const String jwtToken = "JWT_TOKEN";
+  static const String userName = "USER_NAME";
 
   static final String platform = getPlatform();
   static final String deviceType = getPlatform().toUpperCase();
