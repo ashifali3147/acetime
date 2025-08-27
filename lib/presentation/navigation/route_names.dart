@@ -6,4 +6,5 @@ class RouteNames {
   static const home = 'home';
   static const contactSync = 'contactSync';
   static const chat = 'chat';
+  static const callScreen = 'callScreen';
 }
