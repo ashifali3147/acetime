@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:acetime/service/notification_service.dart';
+import 'package:acetime/utils/storage_helper.dart';
 import 'package:acetime/utils/utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -88,6 +90,11 @@ class ChatProvider extends ChangeNotifier {
       deviceToken: receiver.fcmToken ?? "",
       title: Utils.getSenderName(),
       body: text,
+      data: {
+        'chatId': chatId,
+        // Convert the entire user JSON into a string
+        'sender': jsonEncode(StorageHelper().getUserModel()?.toJson()),
+      },
     );
   }
 

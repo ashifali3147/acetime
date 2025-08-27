@@ -31,6 +31,16 @@ class FirestoreService {
           "userName": userName,
           "lastLogin": FieldValue.serverTimestamp(),
         });
+        // Save updated user in cache
+        final cachedUser = UserModel(
+          uid: user.uid,
+          phone: doc.data()?['phone'],
+          userName: userName,
+          fcmToken: fcmToken,
+          createdAt: (doc.data()?['createdAt'] as Timestamp?)?.toDate(),
+          lastLogin: DateTime.now(),
+        );
+        StorageHelper().setUserModel(cachedUser);
       } else {
         // ✅ Create
         final newUser = UserModel(
@@ -42,6 +52,7 @@ class FirestoreService {
           lastLogin: DateTime.now(),
         );
         await userRef.set(newUser.toMap());
+        StorageHelper().setUserModel(newUser);
       }
       StorageHelper().setUserName(userName);
       onSuccess();

@@ -1,21 +1,27 @@
 import 'dart:convert';
 import 'dart:developer';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
 
+import '../model/user_model.dart';
+import '../presentation/navigation/app_router.dart';
+
 class NotificationService {
   // Singleton setup
   NotificationService._internal();
+
   static final NotificationService _instance = NotificationService._internal();
+
   factory NotificationService() => _instance;
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
-  FlutterLocalNotificationsPlugin();
+      FlutterLocalNotificationsPlugin();
 
   /// Initialize notifications (call this in main())
   Future<void> initialize() async {
@@ -30,9 +36,10 @@ class NotificationService {
 
     // Initialize local notifications
     const AndroidInitializationSettings androidInit =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings =
-    InitializationSettings(android: androidInit);
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings = InitializationSettings(
+      android: androidInit,
+    );
 
     await _localNotifications.initialize(
       initSettings,
@@ -48,30 +55,59 @@ class NotificationService {
     });
 
     // Background / app opened from notification
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
       log('[NotificationService] Notification clicked: ${message.data}');
       // Handle navigation here
+      final initialMessage = await _messaging.getInitialMessage();
+      if (initialMessage != null) {
+        final data = initialMessage.data;
+        // final chatId = data['chatId'];
+        final senderJson = data['sender'];
+
+        final senderMap = jsonDecode(senderJson) as Map<String, dynamic>;
+        final sender = UserModel(
+          uid: senderMap['uid'],
+          phone: senderMap['phone'],
+          userName: senderMap['userName'],
+          fcmToken: senderMap['fcmToken'],
+          createdAt: senderMap['createdAt'] != null
+              ? DateTime.parse(senderMap['createdAt'])
+              : null,
+          lastLogin: senderMap['lastLogin'] != null
+              ? DateTime.parse(senderMap['lastLogin'])
+              : null,
+        );
+
+        // Navigate to chat screen
+        Future.delayed(Duration.zero, () {
+          appRouter.go('/chat', extra: sender);
+        });
+      }
     });
 
     // Terminated state
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
-      log('[NotificationService] App opened from terminated: ${initialMessage.data}');
+      log(
+        '[NotificationService] App opened from terminated: ${initialMessage.data}',
+      );
     }
   }
 
   /// Show local notification (for foreground)
   Future<void> _showLocalNotification(RemoteMessage message) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'default_channel',
-      'General Notifications',
-      channelDescription: 'Used for important notifications',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'default_channel',
+          'General Notifications',
+          channelDescription: 'Used for important notifications',
+          importance: Importance.low,
+          priority: Priority.low,
+        );
 
-    const NotificationDetails platformDetails =
-    NotificationDetails(android: androidDetails);
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+    );
 
     await _localNotifications.show(
       message.hashCode,
@@ -85,10 +121,13 @@ class NotificationService {
   /// 🔹 Get access token using service account (OAuth2 flow)
   Future<AccessCredentials> _getAccessToken() async {
     final serviceAccountPath = dotenv.env['PATH_TO_SECRET'];
-    String serviceAccountJson = await rootBundle.loadString(serviceAccountPath!);
+    String serviceAccountJson = await rootBundle.loadString(
+      serviceAccountPath!,
+    );
 
-    final serviceAccount =
-    ServiceAccountCredentials.fromJson(serviceAccountJson);
+    final serviceAccount = ServiceAccountCredentials.fromJson(
+      serviceAccountJson,
+    );
 
     final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
 
