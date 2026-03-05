@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const themeColor = Color(0xFF2B29AF);
+  static const themeColor = Colors.purple;
 
   static const backgroundColor = Color(0xFFFFFFFF);
   static const dialogBackgroundColor = Color(0xFFFFFFFF);

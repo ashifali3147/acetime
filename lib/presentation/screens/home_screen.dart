@@ -49,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         title: Text(
           _selectedIndex == 0 ? "Chats" : "Profile",
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: Colors.purple),
         ),
         centerTitle: true,
       ),
@@ -71,11 +71,11 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
+            icon: Icon(Icons.chat_bubble),
             label: "Chats",
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
+            icon: Icon(Icons.person),
             label: "Profile",
           ),
         ],
