@@ -56,11 +56,13 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
-      path: '/call-screen',
+      path: '/incoming-call',
       name: RouteNames.callScreen,
       builder: (context, state) {
-        final receiver = state.extra as UserModel;
-        return IncomingCallScreen(caller: receiver);
+        final extra = state.extra as Map<String, dynamic>;
+        final caller = extra['caller'] as UserModel;
+        final callId = extra['callId'] as String?;
+        return IncomingCallScreen(callId: callId, caller: caller);
       },
     ),
   ],

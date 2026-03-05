@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:daakia_vc_flutter_sdk/daakia_vc_flutter_sdk.dart';
 import 'package:daakia_vc_flutter_sdk/model/daakia_meeting_configuration.dart';
 import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
@@ -9,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../../model/user_model.dart';
 import '../../providers/chat_provider.dart';
 import '../../service/meeting_service.dart';
+import '../../service/notification_service.dart';
 import '../../utils/storage_helper.dart';
 import '../../utils/utils.dart';
 
@@ -61,6 +64,20 @@ class _ChatScreenState extends State<ChatScreen> {
                 );
 
                 if (meetingId != null && context.mounted) {
+
+                  final senderModel = StorageHelper().getUserModel();
+                  NotificationService().sendPushNotification(
+                    deviceToken: widget.receiver.fcmToken ?? "",
+                    title: senderModel?.userName ?? 'Call',
+                    body: "Incoming call",
+                    data: {
+                      'type': 'incoming_call',
+                      'callId': meetingId,
+                      'sender': jsonEncode(senderModel?.toJson() ?? {}),
+                      'callTimestamp': DateTime.now().toUtc().toIso8601String(),
+                    },
+                  );
+
                   await Navigator.push<void>(
                     context,
                     MaterialPageRoute(

@@ -1,4 +1,3 @@
-import 'package:acetime/utils/storage_helper.dart';
 import 'package:daakia_vc_flutter_sdk/daakia_vc_flutter_sdk.dart';
 import 'package:daakia_vc_flutter_sdk/model/daakia_meeting_configuration.dart';
 import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
@@ -6,19 +5,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../../model/user_model.dart';
+import '../../service/ringtone_service.dart';
+import '../../utils/storage_helper.dart';
 
-class IncomingCallScreen extends StatelessWidget {
+class IncomingCallScreen extends StatefulWidget {
   final String? callId;
   final UserModel caller;
 
-  const IncomingCallScreen({
-    super.key,
-    this.callId,
-    required this.caller,
-  });
+  const IncomingCallScreen({super.key, this.callId, required this.caller});
+
+  @override
+  State<IncomingCallScreen> createState() => _IncomingCallScreenState();
+}
+
+class _IncomingCallScreenState extends State<IncomingCallScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // start ringtone (RingtoneService)
+    RingtoneService().startRinging();
+    // start auto-timeout as a safety too (in case NotificationService didn't)
+    RingtoneService().startAutoTimeout(() {
+      // auto-decline behavior: pop screen and stop ringtone
+      if (mounted) Navigator.of(context).pop();
+      RingtoneService().stopRinging();
+      // optionally notify caller about missed call (via Firestore)
+    }, const Duration(seconds: 30));
+  }
+
+  @override
+  void dispose() {
+    RingtoneService().stopRinging();
+    RingtoneService().cancelAutoTimeout();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final caller = widget.caller;
+
     return Scaffold(
       backgroundColor: Colors.blueAccent,
       body: SafeArea(
@@ -51,23 +76,25 @@ class IncomingCallScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // Reject Button
                 FloatingActionButton(
                   heroTag: "reject",
                   onPressed: () {
+                    // stop ringtone and close
+                    RingtoneService().stopRinging();
                     Navigator.pop(context); // Close incoming call screen
-                    // Optionally: send "rejected" event to caller via Firestore/FCM
+                    // optionally send "rejected" event to caller via Firestore/FCM
                   },
                   backgroundColor: Colors.red,
                   child: const Icon(Icons.call_end),
                 ),
-                // Accept Button
                 FloatingActionButton(
                   heroTag: "accept",
                   onPressed: () async {
-                    var meetingId = callId;
+                    RingtoneService().stopRinging();
+                    final meetingId = widget.callId;
                     if (meetingId != null) {
-                      print("Meeting created: $meetingId");
+                      Navigator.pop(context);
+                      // join meeting as participant
                       await Navigator.push<void>(
                         context,
                         MaterialPageRoute(
@@ -84,6 +111,8 @@ class IncomingCallScreen extends StatelessWidget {
                           ),
                         ),
                       );
+                    } else {
+                      // show error (no meeting id)
                     }
                   },
                   backgroundColor: Colors.green,
