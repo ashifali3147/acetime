@@ -8,20 +8,29 @@ import 'package:acetime/style/app_color.dart';
 import 'package:acetime/utils/custom_slide_page_transition_builder.dart';
 import 'package:acetime/utils/storage_helper.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await NotificationService().initializeForBackgroundMessages();
+  await NotificationService().handleBackgroundMessage(message);
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
   await StorageHelper.init();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   // await Constant.initConstants();
   FcmService().listenForTokenRefresh();
-  NotificationService().initialize();
+  await NotificationService().initialize();
   // Utils.initializeTimeZone();
   runApp(
     MultiProvider(
