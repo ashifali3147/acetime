@@ -146,41 +146,93 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
     final receiver = widget.receiver;
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              radius: 60,
-              backgroundColor: Colors.blueGrey,
-              child: Text(
-                receiver.userName?.substring(0, 1) ?? "U",
-                style: const TextStyle(fontSize: 40, color: Colors.white),
-              ),
+      body: Container(
+        width: double.maxFinite,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF121212), Color(0xFF0A2A43)],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                const Spacer(),
+                Container(
+                  width: 128,
+                  height: 128,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24, width: 2),
+                    color: Colors.blueGrey.shade700,
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black45,
+                        blurRadius: 20,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    receiver.userName?.substring(0, 1).toUpperCase() ?? "U",
+                    style: const TextStyle(
+                      fontSize: 44,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  receiver.userName ?? "Unknown",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 32,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    "Ringing...",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                const Text(
+                  "Waiting for receiver to accept",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white60, fontSize: 14),
+                ),
+                const SizedBox(height: 20),
+                FloatingActionButton(
+                  heroTag: "cancel-outgoing",
+                  onPressed: _cancelCall,
+                  backgroundColor: const Color(0xFFE53935),
+                  elevation: 6,
+                  child: const Icon(Icons.call_end, color: Colors.white),
+                ),
+                const SizedBox(height: 24),
+              ],
             ),
-            const SizedBox(height: 20),
-            Text(
-              receiver.userName ?? "Unknown",
-              style: const TextStyle(
-                fontSize: 28,
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              "Ringing...",
-              style: TextStyle(fontSize: 20, color: Colors.white70),
-            ),
-            const SizedBox(height: 50),
-            FloatingActionButton(
-              heroTag: "cancel-outgoing",
-              onPressed: _cancelCall,
-              backgroundColor: Colors.red,
-              child: const Icon(Icons.call_end),
-            ),
-          ],
+          ),
         ),
       ),
     );
