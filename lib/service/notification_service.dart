@@ -68,6 +68,7 @@ class NotificationService {
       } else if (data['type'] == 'call_ended') {
         _localNotifications.cancel(_callNotificationIdFromData(data));
         RingtoneService().stopRinging();
+        _closeIncomingCallRouteIfOpen();
         if (data['reason'] == 'missed') {
           _showMissedCallNotificationFromData(data);
         }
@@ -233,6 +234,17 @@ class NotificationService {
     final callId = data['callId']?.toString();
     if (callId != null && callId.isNotEmpty) return callId.hashCode;
     return data.hashCode;
+  }
+
+  void _closeIncomingCallRouteIfOpen() {
+    try {
+      final currentPath = appRouter.routeInformationProvider.value.uri.path;
+      if (currentPath == '/incoming-call' && appRouter.canPop()) {
+        appRouter.pop();
+      }
+    } catch (_) {
+      // ignore route state errors
+    }
   }
 
   void _openIncomingCallScreen(Map<String, dynamic> payload) {
@@ -477,7 +489,8 @@ class NotificationService {
       final payloadData = (data ?? {}).map(
         (key, value) => MapEntry(key, value?.toString() ?? ''),
       );
-      final isIncomingCall = payloadData['type'] == 'incoming_call';
+      final type = payloadData['type'];
+      final isCallSignal = type == 'incoming_call' || type == 'call_ended';
 
       final message = {
         'message': {
@@ -488,7 +501,7 @@ class NotificationService {
             'body': body,
           },
           'android': {'priority': 'high'},
-          if (!isIncomingCall) 'notification': {'title': title, 'body': body},
+          if (!isCallSignal) 'notification': {'title': title, 'body': body},
         },
       };
 

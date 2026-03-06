@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:daakia_vc_flutter_sdk/daakia_vc_flutter_sdk.dart';
 import 'package:daakia_vc_flutter_sdk/model/daakia_meeting_configuration.dart';
 import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
@@ -22,10 +24,13 @@ class IncomingCallScreen extends StatefulWidget {
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
   String get _currentUid => FirebaseAuth.instance.currentUser?.uid ?? '';
+  StreamSubscription? _callSubscription;
+  bool _closedByState = false;
 
   @override
   void initState() {
     super.initState();
+    _listenCallState();
     // start ringtone (RingtoneService)
     RingtoneService().startRinging();
     // start auto-timeout as a safety too (in case NotificationService didn't)
@@ -34,14 +39,37 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       if (widget.callId != null) {
         CallService().markMissedIfStillRinging(widget.callId!, actorId: _currentUid);
       }
-      if (mounted) Navigator.of(context).pop();
+      if (mounted && !_closedByState) Navigator.of(context).pop();
       RingtoneService().stopRinging();
       // optionally notify caller about missed call (via Firestore)
     }, const Duration(seconds: 30));
   }
 
+  void _listenCallState() {
+    final callId = widget.callId;
+    if (callId == null || callId.isEmpty) return;
+
+    _callSubscription = CallService().watchCall(callId).listen((snapshot) {
+      final status = snapshot.data()?['status'] as String?;
+      if (status == null || _closedByState) return;
+
+      final shouldClose = status == CallStatus.cancelled ||
+          status == CallStatus.rejected ||
+          status == CallStatus.missed ||
+          status == CallStatus.ended;
+      if (!shouldClose) return;
+
+      _closedByState = true;
+      RingtoneService().stopRinging();
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _callSubscription?.cancel();
     RingtoneService().stopRinging();
     RingtoneService().cancelAutoTimeout();
     super.dispose();
