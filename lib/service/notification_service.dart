@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:typed_data';
 
+import 'package:acetime/service/call_service.dart';
 import 'package:acetime/service/ringtone_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -11,6 +13,11 @@ import 'package:http/http.dart' as http;
 
 import '../model/user_model.dart';
 import '../presentation/navigation/app_router.dart';
+
+@pragma('vm:entry-point')
+void onDidReceiveNotificationResponseBackground(NotificationResponse response) {
+  NotificationService().handleNotificationResponse(response);
+}
 
 class NotificationService {
   // Singleton setup
@@ -23,6 +30,18 @@ class NotificationService {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+  bool _localNotificationsInitialized = false;
+  bool _firebaseListenersInitialized = false;
+  static const String _defaultChannelId = 'default_channel';
+  static const String _callChannelId = 'call_channel';
+  static const String _acceptCallActionId = 'accept_call';
+  static const String _rejectCallActionId = 'reject_call';
+  static final Int64List _callVibrationPattern = Int64List.fromList([
+    0,
+    700,
+    500,
+    900,
+  ]);
 
   /// Initialize notifications (call this in main())
   Future<void> initialize() async {
@@ -35,45 +54,10 @@ class NotificationService {
 
     log('[NotificationService] Permission: ${settings.authorizationStatus}');
 
-    // Initialize local notifications
-    const AndroidInitializationSettings androidInit =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings = InitializationSettings(
-      android: androidInit,
-    );
+    await _initializeLocalNotifications(handleLaunchPayload: true);
 
-    await _localNotifications.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (response) {
-        // When tapped the app will receive this. Parse the payload and route.
-        if (response.payload != null) {
-          try {
-            final payload = jsonDecode(response.payload!);
-            if (payload['type'] == 'incoming_call') {
-              final senderMap = jsonDecode(payload['sender'] ?? '{}');
-              final sender = UserModel(
-                uid: senderMap['uid'],
-                phone: senderMap['phone'],
-                userName: senderMap['userName'],
-                fcmToken: senderMap['fcmToken'],
-                createdAt: senderMap['createdAt'] != null
-                    ? DateTime.parse(senderMap['createdAt'])
-                    : null,
-                lastLogin: senderMap['lastLogin'] != null
-                    ? DateTime.parse(senderMap['lastLogin'])
-                    : null,
-              );
-              appRouter.push('/incoming-call', extra: {
-                'callId': payload['callId'],
-                'caller': sender,
-              });
-            }
-          } catch (e) {
-            // ignore parse errors
-          }
-        }
-      },
-    );
+    if (_firebaseListenersInitialized) return;
+    _firebaseListenersInitialized = true;
 
     // Foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -81,6 +65,13 @@ class NotificationService {
       if (data['type'] == 'incoming_call') {
         // Show the in-app incoming call screen immediately
         _handleIncomingCall(message);
+      } else if (data['type'] == 'call_ended') {
+        _localNotifications.cancel(_callNotificationIdFromData(data));
+        RingtoneService().stopRinging();
+        _closeIncomingCallRouteIfOpen();
+        if (data['reason'] == 'missed') {
+          _showMissedCallNotificationFromData(data);
+        }
       } else {
         _showLocalNotification(message); // existing behavior for chat
       }
@@ -114,7 +105,7 @@ class NotificationService {
       }
     });
 
-    // Terminated state
+    // Terminated state (FCM)
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
       final data = initialMessage.data;
@@ -125,6 +116,156 @@ class NotificationService {
         // existing code
       }
     }
+  }
+
+  /// Initialize only the local notification stack for background isolate.
+  Future<void> initializeForBackgroundMessages() async {
+    await _initializeLocalNotifications(handleLaunchPayload: false);
+  }
+
+  Future<void> handleBackgroundMessage(RemoteMessage message) async {
+    final data = message.data;
+    if (data['type'] == 'incoming_call') {
+      await showIncomingCallLocalNotificationFromData(data);
+      return;
+    }
+    if (data['type'] == 'call_ended') {
+      await _localNotifications.cancel(_callNotificationIdFromData(data));
+      await RingtoneService().stopRinging();
+      if (data['reason'] == 'missed') {
+        await _showMissedCallNotificationFromData(data);
+      }
+    }
+  }
+
+  Future<void> _initializeLocalNotifications({
+    required bool handleLaunchPayload,
+  }) async {
+    if (_localNotificationsInitialized) return;
+
+    const AndroidInitializationSettings androidInit =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings = InitializationSettings(
+      android: androidInit,
+    );
+
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: handleNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse:
+          onDidReceiveNotificationResponseBackground,
+    );
+
+    final androidPlugin = _localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _defaultChannelId,
+        'General Notifications',
+        description: 'Used for important notifications',
+        importance: Importance.high,
+      ),
+    );
+    await androidPlugin?.createNotificationChannel(
+      AndroidNotificationChannel(
+        _callChannelId,
+        'Calls',
+        description: 'Incoming calls',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('ringtone'),
+        enableVibration: true,
+        vibrationPattern: _callVibrationPattern,
+      ),
+    );
+
+    if (handleLaunchPayload) {
+      final launchDetails = await _localNotifications
+          .getNotificationAppLaunchDetails();
+      final launchPayload = launchDetails?.notificationResponse?.payload;
+      if (launchDetails?.didNotificationLaunchApp == true &&
+          launchPayload != null) {
+        try {
+          final payload = jsonDecode(launchPayload) as Map<String, dynamic>;
+          if (payload['type'] == 'incoming_call') {
+            _openIncomingCallScreen(payload);
+          }
+        } catch (e) {
+          log('[NotificationService] Failed to parse launch payload: $e');
+        }
+      }
+    }
+
+    _localNotificationsInitialized = true;
+  }
+
+  Future<void> handleNotificationResponse(NotificationResponse response) async {
+    if (response.payload == null) return;
+
+    try {
+      final payload = jsonDecode(response.payload!) as Map<String, dynamic>;
+      if (payload['type'] != 'incoming_call') return;
+
+      final actionId = response.actionId;
+      final notificationId = _callNotificationIdFromData(payload);
+
+      if (actionId == _rejectCallActionId) {
+        final callId = payload['callId']?.toString();
+        if (callId != null && callId.isNotEmpty) {
+          await CallService().markRejected(callId);
+        }
+        await _localNotifications.cancel(notificationId);
+        await RingtoneService().stopRinging();
+        return;
+      }
+
+      if (actionId == _acceptCallActionId || actionId == null) {
+        await _localNotifications.cancel(notificationId);
+        _openIncomingCallScreen(payload);
+      }
+    } catch (e) {
+      log('[NotificationService] Failed to parse notification payload: $e');
+    }
+  }
+
+  int _callNotificationIdFromData(Map<String, dynamic> data) {
+    final callId = data['callId']?.toString();
+    if (callId != null && callId.isNotEmpty) return callId.hashCode;
+    return data.hashCode;
+  }
+
+  void _closeIncomingCallRouteIfOpen() {
+    try {
+      final currentPath = appRouter.routeInformationProvider.value.uri.path;
+      if (currentPath == '/incoming-call' && appRouter.canPop()) {
+        appRouter.pop();
+      }
+    } catch (_) {
+      // ignore route state errors
+    }
+  }
+
+  void _openIncomingCallScreen(Map<String, dynamic> payload) {
+    final senderMap = jsonDecode(payload['sender'] ?? '{}');
+    final sender = UserModel(
+      uid: senderMap['uid'],
+      phone: senderMap['phone'],
+      userName: senderMap['userName'],
+      fcmToken: senderMap['fcmToken'],
+      createdAt: senderMap['createdAt'] != null
+          ? DateTime.parse(senderMap['createdAt'])
+          : null,
+      lastLogin: senderMap['lastLogin'] != null
+          ? DateTime.parse(senderMap['lastLogin'])
+          : null,
+    );
+
+    appRouter.push('/incoming-call', extra: {
+      'callId': payload['callId'],
+      'caller': sender,
+    });
   }
 
   // Called when message arrives and it's an incoming_call and the app is foreground
@@ -157,6 +298,10 @@ class NotificationService {
     // Start auto-decline timer (e.g., 30 seconds)
     RingtoneService().startAutoTimeout(() {
       // On timeout: stop ringtone and pop incoming screen if present
+      final callId = data['callId']?.toString();
+      if (callId != null && callId.isNotEmpty) {
+        CallService().markMissedIfStillRinging(callId);
+      }
       RingtoneService().stopRinging();
       appRouter.pop(); // carefully ensure route exists
       // Optionally send a "missed call" signal to caller via Firestore/Push
@@ -183,6 +328,10 @@ class NotificationService {
     // start ringtone and timeout as well (the incoming-call screen will stop it when accepted/rejected)
     RingtoneService().startRinging();
     RingtoneService().startAutoTimeout(() {
+      final callId = data['callId']?.toString();
+      if (callId != null && callId.isNotEmpty) {
+        CallService().markMissedIfStillRinging(callId);
+      }
       RingtoneService().stopRinging();
       appRouter.pop();
     }, Duration(seconds: 30));
@@ -193,11 +342,11 @@ class NotificationService {
   Future<void> _showLocalNotification(RemoteMessage message) async {
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'default_channel',
+          _defaultChannelId,
           'General Notifications',
           channelDescription: 'Used for important notifications',
-          importance: Importance.low,
-          priority: Priority.low,
+          importance: Importance.high,
+          priority: Priority.high,
         );
 
     const NotificationDetails platformDetails = NotificationDetails(
@@ -215,18 +364,18 @@ class NotificationService {
 
   /// Show a full-screen incoming-call local notification (Android)
   Future<void> showIncomingCallLocalNotification(RemoteMessage message) async {
-    // Use fullScreenIntent on Android so OS shows full-screen activity for calls
-    final data = message.data;
-    final payload = jsonEncode(data);
+    await showIncomingCallLocalNotificationFromData(message.data);
+  }
 
+  Future<void> _showMissedCallNotificationFromData(
+    Map<String, dynamic> data,
+  ) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'call_channel',
-      'Calls',
-      channelDescription: 'Incoming calls',
-      importance: Importance.max,
+      _defaultChannelId,
+      'General Notifications',
+      channelDescription: 'Used for important notifications',
+      importance: Importance.high,
       priority: Priority.high,
-      fullScreenIntent: true, // critical to show full screen for incoming calls
-      ticker: 'Incoming call',
     );
 
     const NotificationDetails platformDetails = NotificationDetails(
@@ -234,7 +383,59 @@ class NotificationService {
     );
 
     await _localNotifications.show(
-      message.hashCode,
+      '${data['callId']}_missed'.hashCode,
+      'Missed call',
+      'You missed a call',
+      platformDetails,
+      payload: jsonEncode(data),
+    );
+  }
+
+  /// Show a full-screen incoming-call local notification from data payload.
+  Future<void> showIncomingCallLocalNotificationFromData(
+    Map<String, dynamic> data,
+  ) async {
+    // Use fullScreenIntent on Android so OS shows full-screen activity for calls
+    final payload = jsonEncode(data);
+
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _callChannelId,
+      'Calls',
+      channelDescription: 'Incoming calls',
+      importance: Importance.max,
+      priority: Priority.max,
+      fullScreenIntent: true, // critical to show full screen for incoming calls
+      category: AndroidNotificationCategory.call,
+      visibility: NotificationVisibility.public,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('ringtone'),
+      audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+      enableVibration: true,
+      vibrationPattern: _callVibrationPattern,
+      ongoing: true,
+      autoCancel: false,
+      ticker: 'Incoming call',
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          _rejectCallActionId,
+          'Reject',
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          _acceptCallActionId,
+          'Accept',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ],
+    );
+
+    final NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+    );
+
+    await _localNotifications.show(
+      _callNotificationIdFromData(data),
       data['title'] ?? 'Incoming Call',
       data['body'] ?? 'Tap to answer',
       platformDetails,
@@ -279,11 +480,22 @@ class NotificationService {
         'https://fcm.googleapis.com/v1/projects/$projectId/messages:send',
       );
 
+      final payloadData = (data ?? {}).map(
+        (key, value) => MapEntry(key, value?.toString() ?? ''),
+      );
+      final type = payloadData['type'];
+      final isCallSignal = type == 'incoming_call' || type == 'call_ended';
+
       final message = {
         'message': {
           'token': deviceToken,
-          'notification': {'title': title, 'body': body},
-          'data': data ?? {},
+          'data': {
+            ...payloadData,
+            'title': title,
+            'body': body,
+          },
+          'android': {'priority': 'high'},
+          if (!isCallSignal) 'notification': {'title': title, 'body': body},
         },
       };
 

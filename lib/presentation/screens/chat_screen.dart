@@ -1,18 +1,16 @@
 import 'dart:convert';
 
-import 'package:daakia_vc_flutter_sdk/daakia_vc_flutter_sdk.dart';
-import 'package:daakia_vc_flutter_sdk/model/daakia_meeting_configuration.dart';
-import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 
 import '../../model/user_model.dart';
 import '../../providers/chat_provider.dart';
+import '../../service/call_service.dart';
 import '../../service/meeting_service.dart';
 import '../../service/notification_service.dart';
 import '../../utils/storage_helper.dart';
+import 'outgoing_call_screen.dart';
 import '../../utils/utils.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -64,33 +62,43 @@ class _ChatScreenState extends State<ChatScreen> {
                 );
 
                 if (meetingId != null && context.mounted) {
+                  final senderModel = FirebaseAuth.instance.currentUser == null
+                      ? null
+                      : UserModel(
+                          uid: FirebaseAuth.instance.currentUser!.uid,
+                          phone: FirebaseAuth.instance.currentUser!.phoneNumber,
+                          userName: Utils.getSenderName(),
+                          fcmToken: null,
+                        );
+                  if (senderModel == null) return;
 
-                  final senderModel = StorageHelper().getUserModel();
+                  await CallService().createOutgoingCall(
+                    callId: meetingId,
+                    caller: senderModel,
+                    receiver: widget.receiver,
+                  );
+
                   NotificationService().sendPushNotification(
                     deviceToken: widget.receiver.fcmToken ?? "",
-                    title: senderModel?.userName ?? 'Call',
+                    title: senderModel.userName ?? 'Call',
                     body: "Incoming call",
                     data: {
                       'type': 'incoming_call',
                       'callId': meetingId,
-                      'sender': jsonEncode(senderModel?.toJson() ?? {}),
+                      'sender': jsonEncode(senderModel.toJson()),
+                      'callerId': senderModel.uid,
+                      'receiverId': widget.receiver.uid,
                       'callTimestamp': DateTime.now().toUtc().toIso8601String(),
                     },
                   );
 
+                  if (!context.mounted) return;
                   await Navigator.push<void>(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => DaakiaVideoConferenceWidget(
-                        meetingId: meetingId,
-                        secretKey: dotenv.env['LICENSE_KEY'] ?? "",
-                        isHost: true,
-                        configuration: DaakiaMeetingConfiguration(
-                          participantNameConfig: ParticipantNameConfig(
-                            name: StorageHelper().getUserName(),
-                            isEditable: true,
-                          ),
-                        ),
+                      builder: (_) => OutgoingCallScreen(
+                        callId: meetingId,
+                        receiver: widget.receiver,
                       ),
                     ),
                   );

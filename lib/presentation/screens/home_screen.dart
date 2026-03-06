@@ -1,4 +1,5 @@
 import 'package:acetime/presentation/navigation/route_names.dart';
+import 'package:acetime/presentation/page/call_history_page.dart';
 import 'package:acetime/presentation/page/recent_chats_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = [
     const RecentChatsPage(),
+    const CallHistoryPage(),
     const ProfilePage(),
   ];
 
@@ -48,7 +50,11 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: AppColors.backgroundColor,
         elevation: 0,
         title: Text(
-          _selectedIndex == 0 ? "Chats" : "Profile",
+          _selectedIndex == 0
+              ? "Chats"
+              : _selectedIndex == 1
+              ? "Calls"
+              : "Profile",
           style: const TextStyle(color: Colors.purple),
         ),
         centerTitle: true,
@@ -73,6 +79,10 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble),
             label: "Chats",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.call),
+            label: "Calls",
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
