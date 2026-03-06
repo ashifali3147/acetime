@@ -1,6 +1,7 @@
 import 'package:acetime/presentation/navigation/route_names.dart';
 import 'package:acetime/presentation/screens/chat_screen.dart';
 import 'package:acetime/presentation/screens/contacts_sync_page.dart';
+import 'package:acetime/presentation/screens/incoming_call_screen.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../model/user_model.dart';
@@ -52,6 +53,16 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final receiver = state.extra as UserModel;
         return ChatScreen(receiver: receiver);
+      },
+    ),
+    GoRoute(
+      path: '/incoming-call',
+      name: RouteNames.callScreen,
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        final caller = extra['caller'] as UserModel;
+        final callId = extra['callId'] as String?;
+        return IncomingCallScreen(callId: callId, caller: caller);
       },
     ),
   ],
