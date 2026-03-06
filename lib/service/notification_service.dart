@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:typed_data';
 
+import 'package:acetime/service/call_service.dart';
 import 'package:acetime/service/ringtone_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -64,6 +65,12 @@ class NotificationService {
       if (data['type'] == 'incoming_call') {
         // Show the in-app incoming call screen immediately
         _handleIncomingCall(message);
+      } else if (data['type'] == 'call_ended') {
+        _localNotifications.cancel(_callNotificationIdFromData(data));
+        RingtoneService().stopRinging();
+        if (data['reason'] == 'missed') {
+          _showMissedCallNotificationFromData(data);
+        }
       } else {
         _showLocalNotification(message); // existing behavior for chat
       }
@@ -119,6 +126,14 @@ class NotificationService {
     final data = message.data;
     if (data['type'] == 'incoming_call') {
       await showIncomingCallLocalNotificationFromData(data);
+      return;
+    }
+    if (data['type'] == 'call_ended') {
+      await _localNotifications.cancel(_callNotificationIdFromData(data));
+      await RingtoneService().stopRinging();
+      if (data['reason'] == 'missed') {
+        await _showMissedCallNotificationFromData(data);
+      }
     }
   }
 
@@ -174,17 +189,7 @@ class NotificationService {
         try {
           final payload = jsonDecode(launchPayload) as Map<String, dynamic>;
           if (payload['type'] == 'incoming_call') {
-            final senderMap = jsonDecode(payload['sender'] ?? '{}');
-            final sender = UserModel(
-              uid: senderMap['uid'],
-              phone: senderMap['phone'],
-              userName: senderMap['userName'],
-              fcmToken: senderMap['fcmToken'],
-            );
-            appRouter.push('/incoming-call', extra: {
-              'callId': payload['callId'],
-              'caller': sender,
-            });
+            _openIncomingCallScreen(payload);
           }
         } catch (e) {
           log('[NotificationService] Failed to parse launch payload: $e');
@@ -206,6 +211,10 @@ class NotificationService {
       final notificationId = _callNotificationIdFromData(payload);
 
       if (actionId == _rejectCallActionId) {
+        final callId = payload['callId']?.toString();
+        if (callId != null && callId.isNotEmpty) {
+          await CallService().markRejected(callId);
+        }
         await _localNotifications.cancel(notificationId);
         await RingtoneService().stopRinging();
         return;
@@ -277,6 +286,10 @@ class NotificationService {
     // Start auto-decline timer (e.g., 30 seconds)
     RingtoneService().startAutoTimeout(() {
       // On timeout: stop ringtone and pop incoming screen if present
+      final callId = data['callId']?.toString();
+      if (callId != null && callId.isNotEmpty) {
+        CallService().markMissedIfStillRinging(callId);
+      }
       RingtoneService().stopRinging();
       appRouter.pop(); // carefully ensure route exists
       // Optionally send a "missed call" signal to caller via Firestore/Push
@@ -303,6 +316,10 @@ class NotificationService {
     // start ringtone and timeout as well (the incoming-call screen will stop it when accepted/rejected)
     RingtoneService().startRinging();
     RingtoneService().startAutoTimeout(() {
+      final callId = data['callId']?.toString();
+      if (callId != null && callId.isNotEmpty) {
+        CallService().markMissedIfStillRinging(callId);
+      }
       RingtoneService().stopRinging();
       appRouter.pop();
     }, Duration(seconds: 30));
@@ -338,6 +355,30 @@ class NotificationService {
     await showIncomingCallLocalNotificationFromData(message.data);
   }
 
+  Future<void> _showMissedCallNotificationFromData(
+    Map<String, dynamic> data,
+  ) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _defaultChannelId,
+      'General Notifications',
+      channelDescription: 'Used for important notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+    );
+
+    await _localNotifications.show(
+      '${data['callId']}_missed'.hashCode,
+      'Missed call',
+      'You missed a call',
+      platformDetails,
+      payload: jsonEncode(data),
+    );
+  }
+
   /// Show a full-screen incoming-call local notification from data payload.
   Future<void> showIncomingCallLocalNotificationFromData(
     Map<String, dynamic> data,
@@ -361,6 +402,7 @@ class NotificationService {
       vibrationPattern: _callVibrationPattern,
       ongoing: true,
       autoCancel: false,
+      timeoutAfter: 30000,
       ticker: 'Incoming call',
       actions: <AndroidNotificationAction>[
         AndroidNotificationAction(
@@ -388,6 +430,11 @@ class NotificationService {
       platformDetails,
       payload: payload,
     );
+
+    Future<void>.delayed(const Duration(seconds: 32), () async {
+      await _localNotifications.cancel(_callNotificationIdFromData(data));
+      await RingtoneService().stopRinging();
+    });
 
     // Note: showIncomingCallLocalNotification should be called for background/terminated messages
   }

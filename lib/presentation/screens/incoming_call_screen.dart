@@ -1,10 +1,12 @@
 import 'package:daakia_vc_flutter_sdk/daakia_vc_flutter_sdk.dart';
 import 'package:daakia_vc_flutter_sdk/model/daakia_meeting_configuration.dart';
 import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../../model/user_model.dart';
+import '../../service/call_service.dart';
 import '../../service/ringtone_service.dart';
 import '../../utils/storage_helper.dart';
 
@@ -19,6 +21,8 @@ class IncomingCallScreen extends StatefulWidget {
 }
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
+  String get _currentUid => FirebaseAuth.instance.currentUser?.uid ?? '';
+
   @override
   void initState() {
     super.initState();
@@ -27,6 +31,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     // start auto-timeout as a safety too (in case NotificationService didn't)
     RingtoneService().startAutoTimeout(() {
       // auto-decline behavior: pop screen and stop ringtone
+      if (widget.callId != null) {
+        CallService().markMissedIfStillRinging(widget.callId!, actorId: _currentUid);
+      }
       if (mounted) Navigator.of(context).pop();
       RingtoneService().stopRinging();
       // optionally notify caller about missed call (via Firestore)
@@ -78,9 +85,16 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
               children: [
                 FloatingActionButton(
                   heroTag: "reject",
-                  onPressed: () {
+                  onPressed: () async {
                     // stop ringtone and close
+                    if (widget.callId != null) {
+                      await CallService().markRejected(
+                        widget.callId!,
+                        actorId: _currentUid,
+                      );
+                    }
                     RingtoneService().stopRinging();
+                    if (!context.mounted) return;
                     Navigator.pop(context); // Close incoming call screen
                     // optionally send "rejected" event to caller via Firestore/FCM
                   },
@@ -93,6 +107,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                     RingtoneService().stopRinging();
                     final meetingId = widget.callId;
                     if (meetingId != null) {
+                      await CallService().markAccepted(
+                        meetingId,
+                        actorId: _currentUid,
+                      );
+                      if (!context.mounted) return;
                       Navigator.pop(context);
                       // join meeting as participant
                       await Navigator.push<void>(
@@ -110,6 +129,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                             ),
                           ),
                         ),
+                      );
+                      await CallService().markEnded(
+                        meetingId,
+                        actorId: _currentUid,
                       );
                     } else {
                       // show error (no meeting id)

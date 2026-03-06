@@ -1,0 +1,188 @@
+import 'dart:async';
+
+import 'package:acetime/model/user_model.dart';
+import 'package:acetime/service/call_service.dart';
+import 'package:acetime/service/notification_service.dart';
+import 'package:acetime/utils/storage_helper.dart';
+import 'package:daakia_vc_flutter_sdk/daakia_vc_flutter_sdk.dart';
+import 'package:daakia_vc_flutter_sdk/model/daakia_meeting_configuration.dart';
+import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+class OutgoingCallScreen extends StatefulWidget {
+  final String callId;
+  final UserModel receiver;
+
+  const OutgoingCallScreen({
+    super.key,
+    required this.callId,
+    required this.receiver,
+  });
+
+  @override
+  State<OutgoingCallScreen> createState() => _OutgoingCallScreenState();
+}
+
+class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
+  StreamSubscription? _callSubscription;
+  Timer? _timeoutTimer;
+  bool _joining = false;
+  bool _handledTerminalStatus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenCallState();
+    _startTimeout();
+  }
+
+  void _startTimeout() {
+    _timeoutTimer?.cancel();
+    _timeoutTimer = Timer(const Duration(seconds: 30), () async {
+      await CallService().markMissedIfStillRinging(
+        widget.callId,
+        actorId: FirebaseAuth.instance.currentUser?.uid,
+      );
+      await _sendCallEndedPush('missed');
+      if (mounted && !_joining) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+
+  void _listenCallState() {
+    _callSubscription = CallService().watchCall(widget.callId).listen((snapshot) async {
+      final data = snapshot.data();
+      final status = data?['status'] as String?;
+
+      if (status == null) return;
+
+      if (status == CallStatus.accepted && !_joining) {
+        _joining = true;
+        _timeoutTimer?.cancel();
+        await _joinMeetingAsCaller();
+        return;
+      }
+
+      if (_handledTerminalStatus) return;
+      if (status == CallStatus.rejected ||
+          status == CallStatus.missed ||
+          status == CallStatus.cancelled) {
+        _handledTerminalStatus = true;
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      }
+    });
+  }
+
+  Future<void> _joinMeetingAsCaller() async {
+    if (!mounted) return;
+
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DaakiaVideoConferenceWidget(
+          meetingId: widget.callId,
+          secretKey: dotenv.env['LICENSE_KEY'] ?? "",
+          isHost: true,
+          configuration: DaakiaMeetingConfiguration(
+            participantNameConfig: ParticipantNameConfig(
+              name: StorageHelper().getUserName(),
+              isEditable: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await CallService().markEnded(
+      widget.callId,
+      actorId: FirebaseAuth.instance.currentUser?.uid,
+    );
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _cancelCall() async {
+    await CallService().markCancelled(
+      widget.callId,
+      actorId: FirebaseAuth.instance.currentUser?.uid,
+    );
+    await _sendCallEndedPush('cancelled');
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _sendCallEndedPush(String reason) async {
+    final token = widget.receiver.fcmToken;
+    if (token == null || token.isEmpty) return;
+
+    await NotificationService().sendPushNotification(
+      deviceToken: token,
+      title: 'Call ended',
+      body: 'Call $reason',
+      data: {
+        'type': 'call_ended',
+        'callId': widget.callId,
+        'reason': reason,
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _callSubscription?.cancel();
+    _timeoutTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final receiver = widget.receiver;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 60,
+              backgroundColor: Colors.blueGrey,
+              child: Text(
+                receiver.userName?.substring(0, 1) ?? "U",
+                style: const TextStyle(fontSize: 40, color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              receiver.userName ?? "Unknown",
+              style: const TextStyle(
+                fontSize: 28,
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              "Ringing...",
+              style: TextStyle(fontSize: 20, color: Colors.white70),
+            ),
+            const SizedBox(height: 50),
+            FloatingActionButton(
+              heroTag: "cancel-outgoing",
+              onPressed: _cancelCall,
+              backgroundColor: Colors.red,
+              child: const Icon(Icons.call_end),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
