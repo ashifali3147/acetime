@@ -414,7 +414,6 @@ class NotificationService {
       vibrationPattern: _callVibrationPattern,
       ongoing: true,
       autoCancel: false,
-      timeoutAfter: 30000,
       ticker: 'Incoming call',
       actions: <AndroidNotificationAction>[
         AndroidNotificationAction(
@@ -442,11 +441,6 @@ class NotificationService {
       platformDetails,
       payload: payload,
     );
-
-    Future<void>.delayed(const Duration(seconds: 32), () async {
-      await _localNotifications.cancel(_callNotificationIdFromData(data));
-      await RingtoneService().stopRinging();
-    });
 
     // Note: showIncomingCallLocalNotification should be called for background/terminated messages
   }
