@@ -37,6 +37,7 @@ class CallService {
       'callerName': caller.userName,
       'receiverId': receiver.uid,
       'receiverName': receiver.userName,
+      'participants': [caller.uid, receiver.uid],
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
