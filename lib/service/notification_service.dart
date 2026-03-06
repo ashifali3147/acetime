@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:typed_data';
 
 import 'package:acetime/service/ringtone_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -11,6 +12,11 @@ import 'package:http/http.dart' as http;
 
 import '../model/user_model.dart';
 import '../presentation/navigation/app_router.dart';
+
+@pragma('vm:entry-point')
+void onDidReceiveNotificationResponseBackground(NotificationResponse response) {
+  NotificationService().handleNotificationResponse(response);
+}
 
 class NotificationService {
   // Singleton setup
@@ -27,6 +33,14 @@ class NotificationService {
   bool _firebaseListenersInitialized = false;
   static const String _defaultChannelId = 'default_channel';
   static const String _callChannelId = 'call_channel';
+  static const String _acceptCallActionId = 'accept_call';
+  static const String _rejectCallActionId = 'reject_call';
+  static final Int64List _callVibrationPattern = Int64List.fromList([
+    0,
+    700,
+    500,
+    900,
+  ]);
 
   /// Initialize notifications (call this in main())
   Future<void> initialize() async {
@@ -121,35 +135,9 @@ class NotificationService {
 
     await _localNotifications.initialize(
       initSettings,
-      onDidReceiveNotificationResponse: (response) {
-        // When tapped the app will receive this. Parse the payload and route.
-        if (response.payload != null) {
-          try {
-            final payload = jsonDecode(response.payload!);
-            if (payload['type'] == 'incoming_call') {
-              final senderMap = jsonDecode(payload['sender'] ?? '{}');
-              final sender = UserModel(
-                uid: senderMap['uid'],
-                phone: senderMap['phone'],
-                userName: senderMap['userName'],
-                fcmToken: senderMap['fcmToken'],
-                createdAt: senderMap['createdAt'] != null
-                    ? DateTime.parse(senderMap['createdAt'])
-                    : null,
-                lastLogin: senderMap['lastLogin'] != null
-                    ? DateTime.parse(senderMap['lastLogin'])
-                    : null,
-              );
-              appRouter.push('/incoming-call', extra: {
-                'callId': payload['callId'],
-                'caller': sender,
-              });
-            }
-          } catch (e) {
-            log('[NotificationService] Failed to parse notification payload: $e');
-          }
-        }
-      },
+      onDidReceiveNotificationResponse: handleNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse:
+          onDidReceiveNotificationResponseBackground,
     );
 
     final androidPlugin = _localNotifications
@@ -165,11 +153,15 @@ class NotificationService {
       ),
     );
     await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
+      AndroidNotificationChannel(
         _callChannelId,
         'Calls',
         description: 'Incoming calls',
         importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('ringtone'),
+        enableVibration: true,
+        vibrationPattern: _callVibrationPattern,
       ),
     );
 
@@ -201,6 +193,58 @@ class NotificationService {
     }
 
     _localNotificationsInitialized = true;
+  }
+
+  Future<void> handleNotificationResponse(NotificationResponse response) async {
+    if (response.payload == null) return;
+
+    try {
+      final payload = jsonDecode(response.payload!) as Map<String, dynamic>;
+      if (payload['type'] != 'incoming_call') return;
+
+      final actionId = response.actionId;
+      final notificationId = _callNotificationIdFromData(payload);
+
+      if (actionId == _rejectCallActionId) {
+        await _localNotifications.cancel(notificationId);
+        await RingtoneService().stopRinging();
+        return;
+      }
+
+      if (actionId == _acceptCallActionId || actionId == null) {
+        await _localNotifications.cancel(notificationId);
+        _openIncomingCallScreen(payload);
+      }
+    } catch (e) {
+      log('[NotificationService] Failed to parse notification payload: $e');
+    }
+  }
+
+  int _callNotificationIdFromData(Map<String, dynamic> data) {
+    final callId = data['callId']?.toString();
+    if (callId != null && callId.isNotEmpty) return callId.hashCode;
+    return data.hashCode;
+  }
+
+  void _openIncomingCallScreen(Map<String, dynamic> payload) {
+    final senderMap = jsonDecode(payload['sender'] ?? '{}');
+    final sender = UserModel(
+      uid: senderMap['uid'],
+      phone: senderMap['phone'],
+      userName: senderMap['userName'],
+      fcmToken: senderMap['fcmToken'],
+      createdAt: senderMap['createdAt'] != null
+          ? DateTime.parse(senderMap['createdAt'])
+          : null,
+      lastLogin: senderMap['lastLogin'] != null
+          ? DateTime.parse(senderMap['lastLogin'])
+          : null,
+    );
+
+    appRouter.push('/incoming-call', extra: {
+      'callId': payload['callId'],
+      'caller': sender,
+    });
   }
 
   // Called when message arrives and it's an incoming_call and the app is foreground
@@ -301,7 +345,7 @@ class NotificationService {
     // Use fullScreenIntent on Android so OS shows full-screen activity for calls
     final payload = jsonEncode(data);
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       _callChannelId,
       'Calls',
       channelDescription: 'Incoming calls',
@@ -310,17 +354,35 @@ class NotificationService {
       fullScreenIntent: true, // critical to show full screen for incoming calls
       category: AndroidNotificationCategory.call,
       visibility: NotificationVisibility.public,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('ringtone'),
+      audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+      enableVibration: true,
+      vibrationPattern: _callVibrationPattern,
       ongoing: true,
       autoCancel: false,
       ticker: 'Incoming call',
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          _rejectCallActionId,
+          'Reject',
+          cancelNotification: true,
+        ),
+        AndroidNotificationAction(
+          _acceptCallActionId,
+          'Accept',
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+      ],
     );
 
-    const NotificationDetails platformDetails = NotificationDetails(
+    final NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
     );
 
     await _localNotifications.show(
-      data.hashCode,
+      _callNotificationIdFromData(data),
       data['title'] ?? 'Incoming Call',
       data['body'] ?? 'Tap to answer',
       platformDetails,
