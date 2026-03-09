@@ -10,6 +10,7 @@ import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:go_router/go_router.dart';
 
 class OutgoingCallScreen extends StatefulWidget {
   final String callId;
@@ -30,6 +31,24 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
   Timer? _timeoutTimer;
   bool _joining = false;
   bool _handledTerminalStatus = false;
+  bool _isClosing = false;
+
+  void _closeOutgoingScreenSafely() {
+    if (!mounted || _isClosing) return;
+    _isClosing = true;
+    _callSubscription?.cancel();
+    _timeoutTimer?.cancel();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop();
+      } else {
+        context.go('/home');
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -46,9 +65,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
         actorId: FirebaseAuth.instance.currentUser?.uid,
       );
       await _sendCallEndedPush('missed');
-      if (mounted && !_joining) {
-        Navigator.of(context).pop();
-      }
+      if (mounted && !_joining) _closeOutgoingScreenSafely();
     });
   }
 
@@ -71,9 +88,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
           status == CallStatus.missed ||
           status == CallStatus.cancelled) {
         _handledTerminalStatus = true;
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
+        if (mounted) _closeOutgoingScreenSafely();
       }
     });
   }
@@ -103,9 +118,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
       widget.callId,
       actorId: FirebaseAuth.instance.currentUser?.uid,
     );
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
+    if (mounted) _closeOutgoingScreenSafely();
   }
 
   Future<void> _cancelCall() async {
@@ -114,9 +127,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
       actorId: FirebaseAuth.instance.currentUser?.uid,
     );
     await _sendCallEndedPush('cancelled');
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
+    if (mounted) _closeOutgoingScreenSafely();
   }
 
   Future<void> _sendCallEndedPush(String reason) async {
