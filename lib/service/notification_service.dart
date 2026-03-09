@@ -11,6 +11,7 @@ import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -521,12 +522,14 @@ class NotificationService {
           'Reject',
           showsUserInterface: true,
           cancelNotification: true,
+          titleColor: Colors.red,
         ),
         AndroidNotificationAction(
           _acceptCallActionId,
           'Accept',
           showsUserInterface: true,
           cancelNotification: true,
+          titleColor: Colors.green,
         ),
       ],
     );
