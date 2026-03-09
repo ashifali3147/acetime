@@ -36,6 +36,8 @@ class NotificationService {
   static const String _callChannelId = 'call_channel';
   static const String _acceptCallActionId = 'accept_call';
   static const String _rejectCallActionId = 'reject_call';
+  String? _activeIncomingCallId;
+  DateTime? _lastIncomingRouteOpenAt;
   static final Int64List _callVibrationPattern = Int64List.fromList([
     0,
     700,
@@ -242,12 +244,29 @@ class NotificationService {
       if (currentPath == '/incoming-call' && appRouter.canPop()) {
         appRouter.pop();
       }
+      _activeIncomingCallId = null;
     } catch (_) {
       // ignore route state errors
     }
   }
 
   void _openIncomingCallScreen(Map<String, dynamic> payload) {
+    final callId = payload['callId']?.toString();
+    final now = DateTime.now();
+    final openedRecently = _lastIncomingRouteOpenAt != null &&
+        now.difference(_lastIncomingRouteOpenAt!).inSeconds < 2;
+    if (callId != null &&
+        _activeIncomingCallId == callId &&
+        openedRecently) {
+      return;
+    }
+
+    final currentPath = appRouter.routeInformationProvider.value.uri.path;
+    if (currentPath == '/incoming-call') {
+      if (callId != null && _activeIncomingCallId == callId) return;
+      if (appRouter.canPop()) appRouter.pop();
+    }
+
     final senderMap = jsonDecode(payload['sender'] ?? '{}');
     final sender = UserModel(
       uid: senderMap['uid'],
@@ -262,8 +281,10 @@ class NotificationService {
           : null,
     );
 
+    _activeIncomingCallId = callId;
+    _lastIncomingRouteOpenAt = now;
     appRouter.push('/incoming-call', extra: {
-      'callId': payload['callId'],
+      'callId': callId,
       'caller': sender,
     });
   }
@@ -271,26 +292,7 @@ class NotificationService {
   // Called when message arrives and it's an incoming_call and the app is foreground
   void _handleIncomingCall(RemoteMessage message) {
     final data = message.data;
-    final senderJson = data['sender'];
-    final senderMap = senderJson != null ? jsonDecode(senderJson) : {};
-    final sender = UserModel(
-      uid: senderMap['uid'],
-      phone: senderMap['phone'],
-      userName: senderMap['userName'],
-      fcmToken: senderMap['fcmToken'],
-      createdAt: senderMap['createdAt'] != null
-          ? DateTime.parse(senderMap['createdAt'])
-          : null,
-      lastLogin: senderMap['lastLogin'] != null
-          ? DateTime.parse(senderMap['lastLogin'])
-          : null,
-    );
-
-    // Use appRouter to push incoming call screen
-    appRouter.push('/incoming-call', extra: {
-      'callId': data['callId'],
-      'caller': sender,
-    });
+    _openIncomingCallScreen(data);
 
     // Start ringtone loop
     RingtoneService().startRinging();
@@ -303,7 +305,7 @@ class NotificationService {
         CallService().markMissedIfStillRinging(callId);
       }
       RingtoneService().stopRinging();
-      appRouter.pop(); // carefully ensure route exists
+      _closeIncomingCallRouteIfOpen();
       // Optionally send a "missed call" signal to caller via Firestore/Push
     }, Duration(seconds: 30));
   }
@@ -311,19 +313,7 @@ class NotificationService {
   // Called when user taps a notification to open the incoming call (background/terminated)
   void _handleTapIncomingCall(RemoteMessage message) {
     final data = message.data;
-    final senderJson = data['sender'];
-    final senderMap = senderJson != null ? jsonDecode(senderJson) : {};
-    final sender = UserModel(
-      uid: senderMap['uid'],
-      phone: senderMap['phone'],
-      userName: senderMap['userName'],
-      fcmToken: senderMap['fcmToken'],
-    );
-
-    appRouter.push('/incoming-call', extra: {
-      'callId': data['callId'],
-      'caller': sender,
-    });
+    _openIncomingCallScreen(data);
 
     // start ringtone and timeout as well (the incoming-call screen will stop it when accepted/rejected)
     RingtoneService().startRinging();
@@ -333,7 +323,7 @@ class NotificationService {
         CallService().markMissedIfStillRinging(callId);
       }
       RingtoneService().stopRinging();
-      appRouter.pop();
+      _closeIncomingCallRouteIfOpen();
     }, Duration(seconds: 30));
   }
 
