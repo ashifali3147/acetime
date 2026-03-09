@@ -238,6 +238,11 @@ class NotificationService {
     return data.hashCode;
   }
 
+  Future<void> dismissIncomingCallNotification(String? callId) async {
+    if (callId == null || callId.isEmpty) return;
+    await _localNotifications.cancel(callId.hashCode);
+  }
+
   void _closeIncomingCallRouteIfOpen() {
     try {
       final currentPath = appRouter.routeInformationProvider.value.uri.path;
@@ -283,6 +288,7 @@ class NotificationService {
 
     _activeIncomingCallId = callId;
     _lastIncomingRouteOpenAt = now;
+    dismissIncomingCallNotification(callId);
     appRouter.push('/incoming-call', extra: {
       'callId': callId,
       'caller': sender,

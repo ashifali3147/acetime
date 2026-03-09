@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../model/user_model.dart';
 import '../../service/call_service.dart';
+import '../../service/notification_service.dart';
 import '../../service/ringtone_service.dart';
 import '../../utils/storage_helper.dart';
 
@@ -44,6 +45,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   void initState() {
     super.initState();
     _listenCallState();
+    NotificationService().dismissIncomingCallNotification(widget.callId);
     // start ringtone (RingtoneService)
     RingtoneService().startRinging();
     // start auto-timeout as a safety too (in case NotificationService didn't)
