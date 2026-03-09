@@ -220,6 +220,7 @@ class NotificationService {
         }
         await _localNotifications.cancel(notificationId);
         await RingtoneService().stopRinging();
+        _closeIncomingCallRouteIfOpen();
         return;
       }
 
@@ -246,8 +247,12 @@ class NotificationService {
   void _closeIncomingCallRouteIfOpen() {
     try {
       final currentPath = appRouter.routeInformationProvider.value.uri.path;
-      if (currentPath == '/incoming-call' && appRouter.canPop()) {
-        appRouter.pop();
+      if (currentPath == '/incoming-call') {
+        if (appRouter.canPop()) {
+          appRouter.pop();
+        } else {
+          appRouter.go('/home');
+        }
       }
       _activeIncomingCallId = null;
     } catch (_) {

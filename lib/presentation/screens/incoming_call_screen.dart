@@ -127,17 +127,20 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                 FloatingActionButton(
                   heroTag: "reject",
                   onPressed: () async {
-                    // stop ringtone and close
-                    if (widget.callId != null) {
+                    _closedByState = true;
+                    final callId = widget.callId;
+                    if (callId != null && callId.isNotEmpty) {
                       await CallService().markRejected(
-                        widget.callId!,
+                        callId,
                         actorId: _currentUid,
                       );
                     }
-                    RingtoneService().stopRinging();
+                    await RingtoneService().stopRinging();
+                    unawaited(
+                      NotificationService().dismissIncomingCallNotification(callId),
+                    );
                     if (!context.mounted) return;
                     _closeIncomingScreenSafely();
-                    // optionally send "rejected" event to caller via Firestore/FCM
                   },
                   backgroundColor: Colors.red,
                   child: const Icon(Icons.call_end),

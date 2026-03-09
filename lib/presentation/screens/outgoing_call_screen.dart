@@ -39,7 +39,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
     _callSubscription?.cancel();
     _timeoutTimer?.cancel();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.microtask(() {
       if (!mounted) return;
       final navigator = Navigator.of(context);
       if (navigator.canPop()) {
