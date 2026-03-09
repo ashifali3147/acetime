@@ -4,19 +4,36 @@ import 'dart:typed_data';
 
 import 'package:acetime/service/call_service.dart';
 import 'package:acetime/service/ringtone_service.dart';
+import 'package:acetime/utils/storage_helper.dart';
+import 'package:daakia_vc_flutter_sdk/daakia_vc_flutter_sdk.dart';
+import 'package:daakia_vc_flutter_sdk/model/daakia_meeting_configuration.dart';
+import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:http/http.dart' as http;
 
+import '../firebase_options.dart';
 import '../model/user_model.dart';
 import '../presentation/navigation/app_router.dart';
+import '../utils/navigator.dart';
 
 @pragma('vm:entry-point')
-void onDidReceiveNotificationResponseBackground(NotificationResponse response) {
-  NotificationService().handleNotificationResponse(response);
+Future<void> onDidReceiveNotificationResponseBackground(
+  NotificationResponse response,
+) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await NotificationService().initializeForBackgroundMessages();
+  await NotificationService().handleNotificationResponse(
+    response,
+    fromBackground: true,
+  );
 }
 
 class NotificationService {
@@ -186,13 +203,28 @@ class NotificationService {
     if (handleLaunchPayload) {
       final launchDetails = await _localNotifications
           .getNotificationAppLaunchDetails();
-      final launchPayload = launchDetails?.notificationResponse?.payload;
+      final launchResponse = launchDetails?.notificationResponse;
+      final launchPayload = launchResponse?.payload;
       if (launchDetails?.didNotificationLaunchApp == true &&
           launchPayload != null) {
         try {
           final payload = jsonDecode(launchPayload) as Map<String, dynamic>;
           if (payload['type'] == 'incoming_call') {
-            _openIncomingCallScreen(payload);
+            final actionId = launchResponse?.actionId;
+            if (actionId == _rejectCallActionId) {
+              final callId = payload['callId']?.toString();
+              final actorId = _resolveActorId(payload);
+              if (callId != null && callId.isNotEmpty) {
+                await CallService().markRejected(callId, actorId: actorId);
+              }
+              await _localNotifications.cancel(_callNotificationIdFromData(payload));
+              await RingtoneService().stopRinging();
+              _closeIncomingCallRouteIfOpen();
+            } else if (actionId == _acceptCallActionId) {
+              await _handleAcceptAction(payload, openMeeting: true);
+            } else {
+              _openIncomingCallScreen(payload);
+            }
           }
         } catch (e) {
           log('[NotificationService] Failed to parse launch payload: $e');
@@ -203,7 +235,10 @@ class NotificationService {
     _localNotificationsInitialized = true;
   }
 
-  Future<void> handleNotificationResponse(NotificationResponse response) async {
+  Future<void> handleNotificationResponse(
+    NotificationResponse response, {
+    bool fromBackground = false,
+  }) async {
     if (response.payload == null) return;
 
     try {
@@ -215,8 +250,9 @@ class NotificationService {
 
       if (actionId == _rejectCallActionId) {
         final callId = payload['callId']?.toString();
+        final actorId = _resolveActorId(payload);
         if (callId != null && callId.isNotEmpty) {
-          await CallService().markRejected(callId);
+          await CallService().markRejected(callId, actorId: actorId);
         }
         await _localNotifications.cancel(notificationId);
         await RingtoneService().stopRinging();
@@ -226,7 +262,10 @@ class NotificationService {
 
       if (actionId == _acceptCallActionId || actionId == null) {
         await _localNotifications.cancel(notificationId);
-        _openIncomingCallScreen(payload);
+        await _handleAcceptAction(payload, openMeeting: !fromBackground);
+        if (actionId == null && fromBackground) {
+          _openIncomingCallScreen(payload);
+        }
       }
     } catch (e) {
       log('[NotificationService] Failed to parse notification payload: $e');
@@ -298,6 +337,66 @@ class NotificationService {
       'callId': callId,
       'caller': sender,
     });
+  }
+
+  Future<void> _openMeetingDirectly(String meetingId) async {
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) return;
+
+    await navigator.push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder: (_, __, ___) => DaakiaVideoConferenceWidget(
+          meetingId: meetingId,
+          secretKey: dotenv.env['LICENSE_KEY'] ?? "",
+          isHost: false,
+          configuration: DaakiaMeetingConfiguration(
+            participantNameConfig: ParticipantNameConfig(
+              name: StorageHelper().getUserName(),
+              isEditable: false,
+            ),
+            skipPreJoinPage: true,
+          ),
+        ),
+      ),
+    );
+    await CallService().markEnded(
+      meetingId,
+      actorId: FirebaseAuth.instance.currentUser?.uid,
+    );
+  }
+
+  Future<void> _handleAcceptAction(
+    Map<String, dynamic> payload, {
+    required bool openMeeting,
+  }) async {
+    final callId = payload['callId']?.toString();
+    if (callId == null || callId.isEmpty) return;
+    final actorId = _resolveActorId(payload);
+
+    await CallService().markAccepted(
+      callId,
+      actorId: actorId,
+    );
+    await dismissIncomingCallNotification(callId);
+    await RingtoneService().stopRinging();
+    _closeIncomingCallRouteIfOpen();
+
+    if (openMeeting) {
+      await _openMeetingDirectly(callId);
+    }
+  }
+
+  String? _resolveActorId(Map<String, dynamic> payload) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) return uid;
+
+    final receiverId = payload['receiverId']?.toString();
+    if (receiverId != null && receiverId.isNotEmpty) return receiverId;
+
+    final userId = payload['userId']?.toString();
+    if (userId != null && userId.isNotEmpty) return userId;
+
+    return null;
   }
 
   // Called when message arrives and it's an incoming_call and the app is foreground
@@ -420,6 +519,7 @@ class NotificationService {
         AndroidNotificationAction(
           _rejectCallActionId,
           'Reject',
+          showsUserInterface: true,
           cancelNotification: true,
         ),
         AndroidNotificationAction(
