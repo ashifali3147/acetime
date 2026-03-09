@@ -93,6 +93,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
               name: StorageHelper().getUserName(),
               isEditable: true,
             ),
+            skipPreJoinPage: true,
           ),
         ),
       ),
