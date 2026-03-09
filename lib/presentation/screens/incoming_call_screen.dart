@@ -6,9 +6,11 @@ import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../model/user_model.dart';
 import '../../service/call_service.dart';
+import '../../service/notification_service.dart';
 import '../../service/ringtone_service.dart';
 import '../../utils/storage_helper.dart';
 
@@ -26,11 +28,24 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   String get _currentUid => FirebaseAuth.instance.currentUser?.uid ?? '';
   StreamSubscription? _callSubscription;
   bool _closedByState = false;
+  bool _accepting = false;
+
+  void _closeIncomingScreenSafely() {
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+    // Fallback to a stable route to avoid empty go_router configuration.
+    context.go('/home');
+  }
 
   @override
   void initState() {
     super.initState();
     _listenCallState();
+    NotificationService().dismissIncomingCallNotification(widget.callId);
     // start ringtone (RingtoneService)
     RingtoneService().startRinging();
     // start auto-timeout as a safety too (in case NotificationService didn't)
@@ -39,7 +54,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       if (widget.callId != null) {
         CallService().markMissedIfStillRinging(widget.callId!, actorId: _currentUid);
       }
-      if (mounted && !_closedByState) Navigator.of(context).pop();
+      if (!_closedByState) _closeIncomingScreenSafely();
       RingtoneService().stopRinging();
       // optionally notify caller about missed call (via Firestore)
     }, const Duration(seconds: 30));
@@ -61,9 +76,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
       _closedByState = true;
       RingtoneService().stopRinging();
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
+      _closeIncomingScreenSafely();
     });
   }
 
@@ -114,17 +127,20 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                 FloatingActionButton(
                   heroTag: "reject",
                   onPressed: () async {
-                    // stop ringtone and close
-                    if (widget.callId != null) {
+                    _closedByState = true;
+                    final callId = widget.callId;
+                    if (callId != null && callId.isNotEmpty) {
                       await CallService().markRejected(
-                        widget.callId!,
+                        callId,
                         actorId: _currentUid,
                       );
                     }
-                    RingtoneService().stopRinging();
+                    await RingtoneService().stopRinging();
+                    unawaited(
+                      NotificationService().dismissIncomingCallNotification(callId),
+                    );
                     if (!context.mounted) return;
-                    Navigator.pop(context); // Close incoming call screen
-                    // optionally send "rejected" event to caller via Firestore/FCM
+                    _closeIncomingScreenSafely();
                   },
                   backgroundColor: Colors.red,
                   child: const Icon(Icons.call_end),
@@ -132,38 +148,46 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                 FloatingActionButton(
                   heroTag: "accept",
                   onPressed: () async {
-                    RingtoneService().stopRinging();
-                    final meetingId = widget.callId;
-                    if (meetingId != null) {
-                      await CallService().markAccepted(
-                        meetingId,
-                        actorId: _currentUid,
-                      );
-                      if (!context.mounted) return;
-                      Navigator.pop(context);
-                      // join meeting as participant
-                      await Navigator.push<void>(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => DaakiaVideoConferenceWidget(
-                            meetingId: meetingId,
-                            secretKey: dotenv.env['LICENSE_KEY'] ?? "",
-                            isHost: false,
-                            configuration: DaakiaMeetingConfiguration(
-                              participantNameConfig: ParticipantNameConfig(
-                                name: StorageHelper().getUserName(),
-                                isEditable: false,
+                    if (_accepting) return;
+                    _accepting = true;
+                    try {
+                      RingtoneService().stopRinging();
+                      final meetingId = widget.callId;
+                      if (meetingId != null) {
+                        await CallService().markAccepted(
+                          meetingId,
+                          actorId: _currentUid,
+                        );
+                        if (!context.mounted) return;
+                        await Navigator.push<void>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DaakiaVideoConferenceWidget(
+                              meetingId: meetingId,
+                              secretKey: dotenv.env['LICENSE_KEY'] ?? "",
+                              isHost: false,
+                              configuration: DaakiaMeetingConfiguration(
+                                participantNameConfig: ParticipantNameConfig(
+                                  name: StorageHelper().getUserName(),
+                                  isEditable: false,
+                                ),
+                                skipPreJoinPage: true,
                               ),
                             ),
                           ),
-                        ),
-                      );
-                      await CallService().markEnded(
-                        meetingId,
-                        actorId: _currentUid,
-                      );
-                    } else {
-                      // show error (no meeting id)
+                        );
+                        await CallService().markEnded(
+                          meetingId,
+                          actorId: _currentUid,
+                        );
+                        if (context.mounted) {
+                          _closeIncomingScreenSafely();
+                        }
+                      } else {
+                        // show error (no meeting id)
+                      }
+                    } finally {
+                      _accepting = false;
                     }
                   },
                   backgroundColor: Colors.green,
