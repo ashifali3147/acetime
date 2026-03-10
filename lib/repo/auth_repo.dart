@@ -21,13 +21,18 @@ class AuthRepo {
       phoneNumber: number,
       forceResendingToken: _resendToken,
       verificationCompleted: (PhoneAuthCredential credential) {
-        // Auto verification (rare on Android now)
-        signInWithPhoneNumber(
-          context: context,
-          verificationId: credential.verificationId!,
-          smsCode: credential.smsCode!,
-          onSuccess: onAutoLogin,
-        );
+        final verificationId = credential.verificationId;
+        final smsCode = credential.smsCode;
+
+        // Auto verification can return a credential without an SMS code.
+        if (verificationId != null && smsCode != null) {
+          signInWithPhoneNumber(
+            context: context,
+            verificationId: verificationId,
+            smsCode: smsCode,
+            onSuccess: onAutoLogin,
+          );
+        }
       },
       verificationFailed: (FirebaseAuthException e) {
         Utils.showSnackBar(context, message: FirebaseErrorMapper.getMessage(e));
