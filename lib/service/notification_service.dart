@@ -13,7 +13,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutter/widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:googleapis_auth/auth_io.dart';
@@ -165,8 +164,40 @@ class NotificationService {
 
     const AndroidInitializationSettings androidInit =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings = InitializationSettings(
+    final DarwinInitializationSettings darwinInit =
+        DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+          notificationCategories: <DarwinNotificationCategory>[
+            DarwinNotificationCategory(
+              _callChannelId,
+              actions: <DarwinNotificationAction>[
+                DarwinNotificationAction.plain(
+                  _rejectCallActionId,
+                  'Reject',
+                  options: <DarwinNotificationActionOption>{
+                    DarwinNotificationActionOption.destructive,
+                  },
+                ),
+                DarwinNotificationAction.plain(
+                  _acceptCallActionId,
+                  'Accept',
+                  options: <DarwinNotificationActionOption>{
+                    DarwinNotificationActionOption.foreground,
+                  },
+                ),
+              ],
+              options: <DarwinNotificationCategoryOption>{
+                DarwinNotificationCategoryOption.customDismissAction,
+              },
+            ),
+          ],
+        );
+    final InitializationSettings initSettings = InitializationSettings(
       android: androidInit,
+      iOS: darwinInit,
+      macOS: darwinInit,
     );
 
     await _localNotifications.initialize(
@@ -450,8 +481,12 @@ class NotificationService {
           priority: Priority.high,
         );
 
+    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails();
+
     const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
     );
 
     await _localNotifications.show(
@@ -479,8 +514,12 @@ class NotificationService {
       priority: Priority.high,
     );
 
+    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails();
+
     const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
     );
 
     await _localNotifications.show(
@@ -534,8 +573,18 @@ class NotificationService {
       ],
     );
 
+    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
+      categoryIdentifier: _callChannelId,
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+
     final NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
     );
 
     await _localNotifications.show(
