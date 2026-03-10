@@ -42,16 +42,19 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Acetime uses your camera</string>
+	<string>Acetime uses your camera for video calls.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Acetime uses your microphone</string>
+	<string>Acetime uses your microphone for voice communication.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Acetime needs access to your photo library to share images and files.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Acetime uses your contacts to help you connect with people you know.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
 		<string>voip</string>
-		<string>processing</string>
 		<string>audio</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
