@@ -64,6 +64,14 @@ class StorageHelper {
     return getStringData(Constant.fcmToken) ?? "";
   }
 
+  void setVoipToken(String token) {
+    saveStringData(Constant.voipToken, token);
+  }
+
+  String getVoipToken() {
+    return getStringData(Constant.voipToken) ?? "";
+  }
+
   void setJWTToken(String token) {
     saveStringData(Constant.jwtToken, token);
   }
@@ -84,6 +92,18 @@ class StorageHelper {
     saveStringData(Constant.userModel, jsonEncode(user.toJson()));
   }
 
+  void updateCachedUserTokens({String? fcmToken, String? voipToken}) {
+    final currentUser = getUserModel();
+    if (currentUser == null) return;
+
+    setUserModel(
+      currentUser.copyWith(
+        fcmToken: fcmToken ?? currentUser.fcmToken,
+        voipToken: voipToken ?? currentUser.voipToken,
+      ),
+    );
+  }
+
   UserModel? getUserModel() {
     final userJson = getStringData(Constant.userModel);
     if (userJson == null) return null;
@@ -94,10 +114,13 @@ class StorageHelper {
       phone: map['phone'],
       userName: map['userName'],
       fcmToken: map['fcmToken'],
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : null,
-      lastLogin: map['lastLogin'] != null ? DateTime.parse(map['lastLogin']) : null,
+      voipToken: map['voipToken'],
+      createdAt: map['createdAt'] != null
+          ? DateTime.parse(map['createdAt'])
+          : null,
+      lastLogin: map['lastLogin'] != null
+          ? DateTime.parse(map['lastLogin'])
+          : null,
     );
   }
-
-
 }

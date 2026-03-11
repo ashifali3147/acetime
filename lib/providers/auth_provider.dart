@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../repo/auth_repo.dart';
 import '../service/fcm_service.dart';
+import '../service/ios_voip_service.dart';
 import '../utils/constant.dart';
 import '../utils/storage_helper.dart';
 
@@ -191,5 +192,6 @@ class AuthProvider extends ChangeNotifier {
     if (fcmToken != null) {
       StorageHelper().setFCMToken(fcmToken);
     }
+    await IOSVoipService().initialize();
   }
 }

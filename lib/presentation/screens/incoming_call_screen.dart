@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../model/user_model.dart';
 import '../../service/call_service.dart';
+import '../../service/ios_voip_service.dart';
 import '../../service/notification_service.dart';
 import '../../service/ringtone_service.dart';
 import '../../utils/storage_helper.dart';
@@ -52,7 +53,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     RingtoneService().startAutoTimeout(() {
       // auto-decline behavior: pop screen and stop ringtone
       if (widget.callId != null) {
-        CallService().markMissedIfStillRinging(widget.callId!, actorId: _currentUid);
+        CallService().markMissedIfStillRinging(
+          widget.callId!,
+          actorId: _currentUid,
+        );
       }
       if (!_closedByState) _closeIncomingScreenSafely();
       RingtoneService().stopRinging();
@@ -68,7 +72,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       final status = snapshot.data()?['status'] as String?;
       if (status == null || _closedByState) return;
 
-      final shouldClose = status == CallStatus.cancelled ||
+      final shouldClose =
+          status == CallStatus.cancelled ||
           status == CallStatus.rejected ||
           status == CallStatus.missed ||
           status == CallStatus.ended;
@@ -134,10 +139,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                         callId,
                         actorId: _currentUid,
                       );
+                      await IOSVoipService().endCall(callId);
                     }
                     await RingtoneService().stopRinging();
                     unawaited(
-                      NotificationService().dismissIncomingCallNotification(callId),
+                      NotificationService().dismissIncomingCallNotification(
+                        callId,
+                      ),
                     );
                     if (!context.mounted) return;
                     _closeIncomingScreenSafely();
@@ -158,6 +166,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                           meetingId,
                           actorId: _currentUid,
                         );
+                        await IOSVoipService().setCallConnected(meetingId);
                         if (!context.mounted) return;
                         await Navigator.push<void>(
                           context,
@@ -180,6 +189,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                           meetingId,
                           actorId: _currentUid,
                         );
+                        await IOSVoipService().endCall(meetingId);
                         if (context.mounted) {
                           _closeIncomingScreenSafely();
                         }
