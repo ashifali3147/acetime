@@ -72,6 +72,32 @@ class CallService {
     );
   }
 
+  Future<bool> markAcceptedIfStillRinging(
+    String callId, {
+    String? actorId,
+  }) async {
+    var accepted = false;
+
+    await _firestore.runTransaction((transaction) async {
+      final ref = _callRef(callId);
+      final snap = await transaction.get(ref);
+      if (!snap.exists) return;
+
+      final currentStatus = snap.data()?['status'] as String?;
+      if (currentStatus != CallStatus.ringing) return;
+
+      transaction.set(ref, {
+        'status': CallStatus.accepted,
+        'actorId': actorId ?? FirebaseAuth.instance.currentUser?.uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'acceptedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      accepted = true;
+    });
+
+    return accepted;
+  }
+
   Future<void> markRejected(String callId, {String? actorId}) async {
     await updateStatus(
       callId: callId,

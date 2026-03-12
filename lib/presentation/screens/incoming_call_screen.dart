@@ -162,10 +162,18 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                       RingtoneService().stopRinging();
                       final meetingId = widget.callId;
                       if (meetingId != null) {
-                        await CallService().markAccepted(
-                          meetingId,
-                          actorId: _currentUid,
-                        );
+                        final accepted = await CallService()
+                            .markAcceptedIfStillRinging(
+                              meetingId,
+                              actorId: _currentUid,
+                            );
+                        if (!accepted) {
+                          await IOSVoipService().endCall(meetingId);
+                          if (context.mounted) {
+                            _closeIncomingScreenSafely();
+                          }
+                          return;
+                        }
                         await IOSVoipService().setCallConnected(meetingId);
                         if (!context.mounted) return;
                         await Navigator.push<void>(

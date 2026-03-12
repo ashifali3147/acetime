@@ -320,13 +320,14 @@ class NotificationService {
         return;
       }
 
-      if (actionId == _acceptCallActionId || actionId == null) {
+      if (actionId == _acceptCallActionId) {
         await _localNotifications.cancel(notificationId);
         await _handleAcceptAction(payload, openMeeting: !fromBackground);
-        if (actionId == null && fromBackground) {
-          _openIncomingCallScreen(payload);
-        }
+        return;
       }
+
+      await _localNotifications.cancel(notificationId);
+      _openIncomingCallScreen(payload);
     } catch (e) {
       log('[NotificationService] Failed to parse notification payload: $e');
     }
@@ -473,7 +474,16 @@ class NotificationService {
     if (callId == null || callId.isEmpty) return;
     final actorId = _resolveActorId(payload);
 
-    await CallService().markAccepted(callId, actorId: actorId);
+    final accepted = await CallService().markAcceptedIfStillRinging(
+      callId,
+      actorId: actorId,
+    );
+    if (!accepted) {
+      await dismissIncomingCallNotification(callId);
+      await RingtoneService().stopRinging();
+      return;
+    }
+
     await dismissIncomingCallNotification(callId);
     await RingtoneService().stopRinging();
     _closeIncomingCallRouteIfOpen();
