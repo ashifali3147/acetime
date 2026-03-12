@@ -36,7 +36,16 @@ import UIKit
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
+  override func applicationDidBecomeActive(_ application: UIApplication) {
+    super.applicationDidBecomeActive(application)
+    configureFlutterChannel()
+  }
+
   private func configureFlutterChannel() {
+    if flutterChannel != nil {
+      return
+    }
+
     guard let controller = window?.rootViewController as? FlutterViewController else {
       return
     }

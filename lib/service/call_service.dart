@@ -84,6 +84,10 @@ class CallService {
       if (!snap.exists) return;
 
       final currentStatus = snap.data()?['status'] as String?;
+      if (currentStatus == CallStatus.accepted) {
+        accepted = true;
+        return;
+      }
       if (currentStatus != CallStatus.ringing) return;
 
       transaction.set(ref, {

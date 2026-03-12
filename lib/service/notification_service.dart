@@ -320,9 +320,12 @@ class NotificationService {
         return;
       }
 
-      if (actionId == _acceptCallActionId) {
+      if (actionId == _acceptCallActionId || actionId == null) {
         await _localNotifications.cancel(notificationId);
         await _handleAcceptAction(payload, openMeeting: !fromBackground);
+        if (actionId == null && fromBackground) {
+          _openIncomingCallScreen(payload);
+        }
         return;
       }
 
@@ -440,7 +443,15 @@ class NotificationService {
   }
 
   Future<void> _openMeetingDirectly(String meetingId) async {
-    final navigator = navigatorKey.currentState;
+    NavigatorState? navigator;
+    for (var attempt = 0; attempt < 50; attempt++) {
+      navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        break;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+
     if (navigator == null) return;
 
     await navigator.push<void>(
@@ -474,16 +485,7 @@ class NotificationService {
     if (callId == null || callId.isEmpty) return;
     final actorId = _resolveActorId(payload);
 
-    final accepted = await CallService().markAcceptedIfStillRinging(
-      callId,
-      actorId: actorId,
-    );
-    if (!accepted) {
-      await dismissIncomingCallNotification(callId);
-      await RingtoneService().stopRinging();
-      return;
-    }
-
+    await CallService().markAccepted(callId, actorId: actorId);
     await dismissIncomingCallNotification(callId);
     await RingtoneService().stopRinging();
     _closeIncomingCallRouteIfOpen();
