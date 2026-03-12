@@ -113,7 +113,7 @@ class AuthRepo {
   }
 
   /// Sign out and go back to login
-  static void logoutApp({VoidCallback? onLogout}) async {
+  static Future<void> logoutApp({VoidCallback? onLogout}) async {
     await _firebaseAuth.signOut();
     onLogout?.call();
   }
