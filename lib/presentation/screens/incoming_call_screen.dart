@@ -258,6 +258,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                                                         isEditable: false,
                                                       ),
                                                   skipPreJoinPage: true,
+                                                  enableCameraByDefault: true,
+                                                  enableMicrophoneByDefault: true
                                                 ),
                                           ),
                                     ),

@@ -465,7 +465,9 @@ class NotificationService {
               name: StorageHelper().getUserName(),
               isEditable: false,
             ),
-            skipPreJoinPage: true,
+              skipPreJoinPage: true,
+              enableCameraByDefault: true,
+              enableMicrophoneByDefault: true
           ),
         ),
       ),
