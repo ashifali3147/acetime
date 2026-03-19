@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'dart:typed_data';
 
 import 'package:acetime/service/call_service.dart';
+import 'package:acetime/service/ios_voip_service.dart';
 import 'package:acetime/service/ringtone_service.dart';
 import 'package:acetime/utils/storage_helper.dart';
 import 'package:daakia_vc_flutter_sdk/daakia_vc_flutter_sdk.dart';
@@ -13,7 +14,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutter/widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:googleapis_auth/auth_io.dart';
@@ -50,6 +50,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   bool _localNotificationsInitialized = false;
   bool _firebaseListenersInitialized = false;
+  bool _voipListenersInitialized = false;
   static const String _defaultChannelId = 'default_channel';
   static const String _callChannelId = 'call_channel';
   static const String _acceptCallActionId = 'accept_call';
@@ -75,6 +76,7 @@ class NotificationService {
     log('[NotificationService] Permission: ${settings.authorizationStatus}');
 
     await _initializeLocalNotifications(handleLaunchPayload: true);
+    _initializeVoipListeners();
 
     if (_firebaseListenersInitialized) return;
     _firebaseListenersInitialized = true;
@@ -113,6 +115,7 @@ class NotificationService {
             phone: senderMap['phone'],
             userName: senderMap['userName'],
             fcmToken: senderMap['fcmToken'],
+            voipToken: senderMap['voipToken'],
             createdAt: senderMap['createdAt'] != null
                 ? DateTime.parse(senderMap['createdAt'])
                 : null,
@@ -143,6 +146,28 @@ class NotificationService {
     await _initializeLocalNotifications(handleLaunchPayload: false);
   }
 
+  void _initializeVoipListeners() {
+    if (_voipListenersInitialized) return;
+    _voipListenersInitialized = true;
+
+    IOSVoipService().events.listen((event) {
+      switch (event.method) {
+        case 'incomingCall':
+          handleNativeIncomingCall(event.payload);
+          break;
+        case 'callAccepted':
+          handleNativeCallAccepted(event.payload);
+          break;
+        case 'callDeclined':
+          handleNativeCallDeclined(event.payload);
+          break;
+        case 'callEnded':
+          handleNativeCallEnded(event.payload);
+          break;
+      }
+    });
+  }
+
   Future<void> handleBackgroundMessage(RemoteMessage message) async {
     final data = message.data;
     if (data['type'] == 'incoming_call') {
@@ -165,8 +190,40 @@ class NotificationService {
 
     const AndroidInitializationSettings androidInit =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initSettings = InitializationSettings(
+    final DarwinInitializationSettings darwinInit =
+        DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+          notificationCategories: <DarwinNotificationCategory>[
+            DarwinNotificationCategory(
+              _callChannelId,
+              actions: <DarwinNotificationAction>[
+                DarwinNotificationAction.plain(
+                  _rejectCallActionId,
+                  'Reject',
+                  options: <DarwinNotificationActionOption>{
+                    DarwinNotificationActionOption.destructive,
+                  },
+                ),
+                DarwinNotificationAction.plain(
+                  _acceptCallActionId,
+                  'Accept',
+                  options: <DarwinNotificationActionOption>{
+                    DarwinNotificationActionOption.foreground,
+                  },
+                ),
+              ],
+              options: <DarwinNotificationCategoryOption>{
+                DarwinNotificationCategoryOption.customDismissAction,
+              },
+            ),
+          ],
+        );
+    final InitializationSettings initSettings = InitializationSettings(
       android: androidInit,
+      iOS: darwinInit,
+      macOS: darwinInit,
     );
 
     await _localNotifications.initialize(
@@ -218,7 +275,9 @@ class NotificationService {
               if (callId != null && callId.isNotEmpty) {
                 await CallService().markRejected(callId, actorId: actorId);
               }
-              await _localNotifications.cancel(_callNotificationIdFromData(payload));
+              await _localNotifications.cancel(
+                _callNotificationIdFromData(payload),
+              );
               await RingtoneService().stopRinging();
               _closeIncomingCallRouteIfOpen();
             } else if (actionId == _acceptCallActionId) {
@@ -267,7 +326,11 @@ class NotificationService {
         if (actionId == null && fromBackground) {
           _openIncomingCallScreen(payload);
         }
+        return;
       }
+
+      await _localNotifications.cancel(notificationId);
+      _openIncomingCallScreen(payload);
     } catch (e) {
       log('[NotificationService] Failed to parse notification payload: $e');
     }
@@ -282,6 +345,42 @@ class NotificationService {
   Future<void> dismissIncomingCallNotification(String? callId) async {
     if (callId == null || callId.isEmpty) return;
     await _localNotifications.cancel(callId.hashCode);
+  }
+
+  Future<void> handleNativeIncomingCall(Map<String, dynamic> data) async {
+    _openIncomingCallScreen(data);
+    RingtoneService().startRinging();
+    RingtoneService().startAutoTimeout(() {
+      final callId = data['callId']?.toString();
+      if (callId != null && callId.isNotEmpty) {
+        CallService().markMissedIfStillRinging(callId);
+      }
+      RingtoneService().stopRinging();
+      _closeIncomingCallRouteIfOpen();
+    }, const Duration(seconds: 30));
+  }
+
+  Future<void> handleNativeCallAccepted(Map<String, dynamic> data) async {
+    await _handleAcceptAction(data, openMeeting: true);
+  }
+
+  Future<void> handleNativeCallDeclined(Map<String, dynamic> data) async {
+    final callId = data['callId']?.toString();
+    final actorId = _resolveActorId(data);
+    if (callId != null && callId.isNotEmpty) {
+      await CallService().markRejected(callId, actorId: actorId);
+    }
+    await dismissIncomingCallNotification(callId);
+    await RingtoneService().stopRinging();
+    _closeIncomingCallRouteIfOpen();
+  }
+
+  Future<void> handleNativeCallEnded(Map<String, dynamic> data) async {
+    final callId = data['callId']?.toString();
+    await IOSVoipService().endCall(callId);
+    await dismissIncomingCallNotification(callId);
+    await RingtoneService().stopRinging();
+    _closeIncomingCallRouteIfOpen();
   }
 
   void _closeIncomingCallRouteIfOpen() {
@@ -303,11 +402,10 @@ class NotificationService {
   void _openIncomingCallScreen(Map<String, dynamic> payload) {
     final callId = payload['callId']?.toString();
     final now = DateTime.now();
-    final openedRecently = _lastIncomingRouteOpenAt != null &&
+    final openedRecently =
+        _lastIncomingRouteOpenAt != null &&
         now.difference(_lastIncomingRouteOpenAt!).inSeconds < 2;
-    if (callId != null &&
-        _activeIncomingCallId == callId &&
-        openedRecently) {
+    if (callId != null && _activeIncomingCallId == callId && openedRecently) {
       return;
     }
 
@@ -317,12 +415,16 @@ class NotificationService {
       if (appRouter.canPop()) appRouter.pop();
     }
 
-    final senderMap = jsonDecode(payload['sender'] ?? '{}');
+    final senderRaw = payload['sender'];
+    final senderMap = senderRaw is String
+        ? jsonDecode(senderRaw) as Map<String, dynamic>
+        : Map<String, dynamic>.from(senderRaw as Map? ?? const {});
     final sender = UserModel(
       uid: senderMap['uid'],
       phone: senderMap['phone'],
       userName: senderMap['userName'],
       fcmToken: senderMap['fcmToken'],
+      voipToken: senderMap['voipToken'],
       createdAt: senderMap['createdAt'] != null
           ? DateTime.parse(senderMap['createdAt'])
           : null,
@@ -334,14 +436,22 @@ class NotificationService {
     _activeIncomingCallId = callId;
     _lastIncomingRouteOpenAt = now;
     dismissIncomingCallNotification(callId);
-    appRouter.push('/incoming-call', extra: {
-      'callId': callId,
-      'caller': sender,
-    });
+    appRouter.push(
+      '/incoming-call',
+      extra: {'callId': callId, 'caller': sender},
+    );
   }
 
   Future<void> _openMeetingDirectly(String meetingId) async {
-    final navigator = navigatorKey.currentState;
+    NavigatorState? navigator;
+    for (var attempt = 0; attempt < 50; attempt++) {
+      navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        break;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+
     if (navigator == null) return;
 
     await navigator.push<void>(
@@ -355,7 +465,9 @@ class NotificationService {
               name: StorageHelper().getUserName(),
               isEditable: false,
             ),
-            skipPreJoinPage: true,
+              skipPreJoinPage: true,
+              enableCameraByDefault: true,
+              enableMicrophoneByDefault: true
           ),
         ),
       ),
@@ -364,6 +476,7 @@ class NotificationService {
       meetingId,
       actorId: FirebaseAuth.instance.currentUser?.uid,
     );
+    await IOSVoipService().endCall(meetingId);
   }
 
   Future<void> _handleAcceptAction(
@@ -374,13 +487,11 @@ class NotificationService {
     if (callId == null || callId.isEmpty) return;
     final actorId = _resolveActorId(payload);
 
-    await CallService().markAccepted(
-      callId,
-      actorId: actorId,
-    );
+    await CallService().markAccepted(callId, actorId: actorId);
     await dismissIncomingCallNotification(callId);
     await RingtoneService().stopRinging();
     _closeIncomingCallRouteIfOpen();
+    await IOSVoipService().setCallConnected(callId);
 
     if (openMeeting) {
       await _openMeetingDirectly(callId);
@@ -438,7 +549,6 @@ class NotificationService {
     }, Duration(seconds: 30));
   }
 
-
   /// Show local notification (for foreground)
   Future<void> _showLocalNotification(RemoteMessage message) async {
     const AndroidNotificationDetails androidDetails =
@@ -450,8 +560,12 @@ class NotificationService {
           priority: Priority.high,
         );
 
+    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails();
+
     const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
     );
 
     await _localNotifications.show(
@@ -471,16 +585,21 @@ class NotificationService {
   Future<void> _showMissedCallNotificationFromData(
     Map<String, dynamic> data,
   ) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      _defaultChannelId,
-      'General Notifications',
-      channelDescription: 'Used for important notifications',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          _defaultChannelId,
+          'General Notifications',
+          channelDescription: 'Used for important notifications',
+          importance: Importance.high,
+          priority: Priority.high,
+        );
+
+    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails();
 
     const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
     );
 
     await _localNotifications.show(
@@ -499,43 +618,55 @@ class NotificationService {
     // Use fullScreenIntent on Android so OS shows full-screen activity for calls
     final payload = jsonEncode(data);
 
-    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      _callChannelId,
-      'Calls',
-      channelDescription: 'Incoming calls',
-      importance: Importance.max,
-      priority: Priority.max,
-      fullScreenIntent: true, // critical to show full screen for incoming calls
-      category: AndroidNotificationCategory.call,
-      visibility: NotificationVisibility.public,
-      playSound: true,
-      sound: RawResourceAndroidNotificationSound('ringtone'),
-      audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
-      enableVibration: true,
-      vibrationPattern: _callVibrationPattern,
-      ongoing: true,
-      autoCancel: false,
-      ticker: 'Incoming call',
-      actions: <AndroidNotificationAction>[
-        AndroidNotificationAction(
-          _rejectCallActionId,
-          'Reject',
-          showsUserInterface: true,
-          cancelNotification: true,
-          titleColor: Colors.red,
-        ),
-        AndroidNotificationAction(
-          _acceptCallActionId,
-          'Accept',
-          showsUserInterface: true,
-          cancelNotification: true,
-          titleColor: Colors.green,
-        ),
-      ],
+    final AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          _callChannelId,
+          'Calls',
+          channelDescription: 'Incoming calls',
+          importance: Importance.max,
+          priority: Priority.max,
+          fullScreenIntent:
+              true, // critical to show full screen for incoming calls
+          category: AndroidNotificationCategory.call,
+          visibility: NotificationVisibility.public,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('ringtone'),
+          audioAttributesUsage: AudioAttributesUsage.notificationRingtone,
+          enableVibration: true,
+          vibrationPattern: _callVibrationPattern,
+          ongoing: true,
+          autoCancel: false,
+          ticker: 'Incoming call',
+          actions: <AndroidNotificationAction>[
+            AndroidNotificationAction(
+              _rejectCallActionId,
+              'Reject',
+              showsUserInterface: true,
+              cancelNotification: true,
+              titleColor: Colors.red,
+            ),
+            AndroidNotificationAction(
+              _acceptCallActionId,
+              'Accept',
+              showsUserInterface: true,
+              cancelNotification: true,
+              titleColor: Colors.green,
+            ),
+          ],
+        );
+
+    const DarwinNotificationDetails darwinDetails = DarwinNotificationDetails(
+      categoryIdentifier: _callChannelId,
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
     final NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
     );
 
     await _localNotifications.show(
@@ -593,11 +724,7 @@ class NotificationService {
       final message = {
         'message': {
           'token': deviceToken,
-          'data': {
-            ...payloadData,
-            'title': title,
-            'body': body,
-          },
+          'data': {...payloadData, 'title': title, 'body': body},
           'android': {'priority': 'high'},
           if (!isCallSignal) 'notification': {'title': title, 'body': body},
         },

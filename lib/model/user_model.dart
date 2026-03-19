@@ -5,6 +5,7 @@ class UserModel {
   final String? phone;
   final String? userName;
   final String? fcmToken;
+  final String? voipToken;
   final DateTime? createdAt;
   final DateTime? lastLogin;
 
@@ -13,6 +14,7 @@ class UserModel {
     this.phone,
     this.userName,
     this.fcmToken,
+    this.voipToken,
     this.createdAt,
     this.lastLogin,
   });
@@ -24,6 +26,7 @@ class UserModel {
       phone: data["phone"],
       userName: data["userName"],
       fcmToken: data["fcmToken"],
+      voipToken: data["voipToken"],
       createdAt: (data["createdAt"] as Timestamp?)?.toDate(),
       lastLogin: (data["lastLogin"] as Timestamp?)?.toDate(),
     );
@@ -35,8 +38,13 @@ class UserModel {
       "phone": phone,
       "userName": userName,
       "fcmToken": fcmToken,
-      "createdAt": createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
-      "lastLogin": lastLogin != null ? Timestamp.fromDate(lastLogin!) : FieldValue.serverTimestamp(),
+      "voipToken": voipToken,
+      "createdAt": createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp(),
+      "lastLogin": lastLogin != null
+          ? Timestamp.fromDate(lastLogin!)
+          : FieldValue.serverTimestamp(),
     };
   }
 
@@ -46,9 +54,29 @@ class UserModel {
       "phone": phone,
       "userName": userName,
       "fcmToken": fcmToken,
+      "voipToken": voipToken,
       "createdAt": createdAt?.toIso8601String(),
       "lastLogin": lastLogin?.toIso8601String(),
     };
   }
 
+  UserModel copyWith({
+    String? uid,
+    String? phone,
+    String? userName,
+    String? fcmToken,
+    String? voipToken,
+    DateTime? createdAt,
+    DateTime? lastLogin,
+  }) {
+    return UserModel(
+      uid: uid ?? this.uid,
+      phone: phone ?? this.phone,
+      userName: userName ?? this.userName,
+      fcmToken: fcmToken ?? this.fcmToken,
+      voipToken: voipToken ?? this.voipToken,
+      createdAt: createdAt ?? this.createdAt,
+      lastLogin: lastLogin ?? this.lastLogin,
+    );
+  }
 }

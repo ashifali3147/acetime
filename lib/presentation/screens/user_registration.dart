@@ -68,8 +68,10 @@ class _UserRegistrationState extends State<UserRegistration> {
                     isLoading = true;
                   });
                   final fcmToken = StorageHelper().getFCMToken();
+                  final voipToken = StorageHelper().getVoipToken();
                   await FirestoreService().getOrCreateUser(
                     fcmToken: fcmToken,
+                    voipToken: voipToken.isEmpty ? null : voipToken,
                     userName: fullNameController.text.trim(),
                     onSuccess: () {
                       setState(() {

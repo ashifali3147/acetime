@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../style/app_color.dart';
+import '../page/profile_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -62,12 +64,12 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _pages[_selectedIndex],
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
-        onPressed: () {
-          context.pushNamed(RouteNames.contactSync);
-        },
-        backgroundColor: AppColors.themeColor,
-        child: const Icon(Icons.message, color: Colors.white),
-      )
+              onPressed: () {
+                context.pushNamed(RouteNames.contactSync);
+              },
+              backgroundColor: AppColors.themeColor,
+              child: const Icon(Icons.message, color: Colors.white),
+            )
           : null,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -80,30 +82,9 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.chat_bubble),
             label: "Chats",
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.call),
-            label: "Calls",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: "Profile",
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.call), label: "Calls"),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
-      ),
-    );
-  }
-}
-
-/// Profile Page (placeholder for now)
-class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        "Profile Page",
-        style: TextStyle(color: Colors.white, fontSize: 18),
       ),
     );
   }

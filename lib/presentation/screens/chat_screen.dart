@@ -68,7 +68,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           uid: FirebaseAuth.instance.currentUser!.uid,
                           phone: FirebaseAuth.instance.currentUser!.phoneNumber,
                           userName: Utils.getSenderName(),
-                          fcmToken: null,
+                          fcmToken: StorageHelper().getFCMToken(),
+                          voipToken: StorageHelper().getVoipToken().isEmpty
+                              ? null
+                              : StorageHelper().getVoipToken(),
                         );
                   if (senderModel == null) return;
 
