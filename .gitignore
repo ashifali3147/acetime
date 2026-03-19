@@ -149,3 +149,5 @@ coverage/
 # Secrets
 .env
 secret/
+scripts/
+daakia_callkit_flutter/

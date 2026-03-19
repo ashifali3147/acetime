@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:acetime/model/user_model.dart';
 import 'package:acetime/service/call_service.dart';
+import 'package:acetime/service/ios_voip_service.dart';
 import 'package:acetime/service/notification_service.dart';
 import 'package:acetime/utils/storage_helper.dart';
 import 'package:daakia_vc_flutter_sdk/daakia_vc_flutter_sdk.dart';
@@ -10,6 +11,7 @@ import 'package:daakia_vc_flutter_sdk/model/participant_config.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:go_router/go_router.dart';
 
 class OutgoingCallScreen extends StatefulWidget {
   final String callId;
@@ -30,6 +32,24 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
   Timer? _timeoutTimer;
   bool _joining = false;
   bool _handledTerminalStatus = false;
+  bool _isClosing = false;
+
+  void _closeOutgoingScreenSafely() {
+    if (!mounted || _isClosing) return;
+    _isClosing = true;
+    _callSubscription?.cancel();
+    _timeoutTimer?.cancel();
+
+    Future.microtask(() {
+      if (!mounted) return;
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop();
+      } else {
+        context.go('/home');
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -46,14 +66,14 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
         actorId: FirebaseAuth.instance.currentUser?.uid,
       );
       await _sendCallEndedPush('missed');
-      if (mounted && !_joining) {
-        Navigator.of(context).pop();
-      }
+      if (mounted && !_joining) _closeOutgoingScreenSafely();
     });
   }
 
   void _listenCallState() {
-    _callSubscription = CallService().watchCall(widget.callId).listen((snapshot) async {
+    _callSubscription = CallService().watchCall(widget.callId).listen((
+      snapshot,
+    ) async {
       final data = snapshot.data();
       final status = data?['status'] as String?;
 
@@ -71,9 +91,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
           status == CallStatus.missed ||
           status == CallStatus.cancelled) {
         _handledTerminalStatus = true;
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
+        if (mounted) _closeOutgoingScreenSafely();
       }
     });
   }
@@ -93,6 +111,9 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
               name: StorageHelper().getUserName(),
               isEditable: true,
             ),
+              skipPreJoinPage: true,
+              enableCameraByDefault: true,
+              enableMicrophoneByDefault: true
           ),
         ),
       ),
@@ -102,9 +123,8 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
       widget.callId,
       actorId: FirebaseAuth.instance.currentUser?.uid,
     );
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
+    await IOSVoipService().endCall(widget.callId);
+    if (mounted) _closeOutgoingScreenSafely();
   }
 
   Future<void> _cancelCall() async {
@@ -112,10 +132,9 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
       widget.callId,
       actorId: FirebaseAuth.instance.currentUser?.uid,
     );
+    await IOSVoipService().endCall(widget.callId);
     await _sendCallEndedPush('cancelled');
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
+    if (mounted) _closeOutgoingScreenSafely();
   }
 
   Future<void> _sendCallEndedPush(String reason) async {
@@ -126,11 +145,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen> {
       deviceToken: token,
       title: 'Call ended',
       body: 'Call $reason',
-      data: {
-        'type': 'call_ended',
-        'callId': widget.callId,
-        'reason': reason,
-      },
+      data: {'type': 'call_ended', 'callId': widget.callId, 'reason': reason},
     );
   }
 

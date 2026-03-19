@@ -10,6 +10,7 @@ class FirestoreService {
 
   Future<void> getOrCreateUser({
     required String? fcmToken,
+    String? voipToken,
     required String userName,
     required Function() onSuccess,
     required Function(String) onError,
@@ -28,6 +29,7 @@ class FirestoreService {
         // ✅ Update
         await userRef.update({
           "fcmToken": fcmToken,
+          if (voipToken != null) "voipToken": voipToken,
           "userName": userName,
           "lastLogin": FieldValue.serverTimestamp(),
         });
@@ -37,6 +39,7 @@ class FirestoreService {
           phone: doc.data()?['phone'],
           userName: userName,
           fcmToken: fcmToken,
+          voipToken: voipToken ?? doc.data()?['voipToken'],
           createdAt: (doc.data()?['createdAt'] as Timestamp?)?.toDate(),
           lastLogin: DateTime.now(),
         );
@@ -48,6 +51,7 @@ class FirestoreService {
           phone: user.phoneNumber,
           userName: userName,
           fcmToken: fcmToken,
+          voipToken: voipToken,
           createdAt: DateTime.now(),
           lastLogin: DateTime.now(),
         );
@@ -72,9 +76,7 @@ class FirestoreService {
   }
 
   /// Update current user's FCM token in Firestore
-  Future<void> updateFcmToken({
-    required String fcmToken,
-  }) async {
+  Future<void> updateFcmToken({required String fcmToken}) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -93,6 +95,23 @@ class FirestoreService {
     }
   }
 
+  Future<void> updateVoipToken({required String voipToken}) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        debugPrint("No authenticated user found");
+        return;
+      }
+
+      final userRef = _firestore.collection('users').doc(user.uid);
+      await userRef.set({
+        'voipToken': voipToken,
+        'lastLogin': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint("Failed to update VoIP token: $e");
+    }
+  }
 
   /// Fetch cached contacts for the current user
   Future<List<UserModel>> getUserContacts() async {
@@ -116,8 +135,10 @@ class FirestoreService {
     if (currentUser == null) return;
 
     final batch = _firestore.batch();
-    final userContactsRef =
-    _firestore.collection('users').doc(currentUser.uid).collection('contacts');
+    final userContactsRef = _firestore
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('contacts');
 
     for (var contact in contacts) {
       final docRef = userContactsRef.doc(contact.uid);

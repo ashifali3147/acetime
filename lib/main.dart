@@ -3,6 +3,7 @@ import 'package:acetime/providers/auth_provider.dart';
 import 'package:acetime/providers/chat_provider.dart';
 import 'package:acetime/providers/contacts_sync_provider.dart';
 import 'package:acetime/service/fcm_service.dart';
+import 'package:acetime/service/ios_voip_service.dart';
 import 'package:acetime/service/notification_service.dart';
 import 'package:acetime/style/app_color.dart';
 import 'package:acetime/utils/custom_slide_page_transition_builder.dart';
@@ -31,6 +32,7 @@ Future<void> main() async {
   // await Constant.initConstants();
   FcmService().listenForTokenRefresh();
   await NotificationService().initialize();
+  await IOSVoipService().initialize();
   // Utils.initializeTimeZone();
   runApp(
     MultiProvider(

@@ -46,6 +46,8 @@ class FcmService {
 
       if (token != null) {
         _cachedToken = token;
+        StorageHelper().setFCMToken(token);
+        StorageHelper().updateCachedUserTokens(fcmToken: token);
       } else {
         debugPrint('[FCM] Failed to get FCM token');
       }
@@ -62,6 +64,7 @@ class FcmService {
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
       _cachedToken = newToken;
       StorageHelper().setFCMToken(newToken);
+      StorageHelper().updateCachedUserTokens(fcmToken: newToken);
       await FirestoreService().updateFcmToken(fcmToken: newToken);
       onRefresh?.call(newToken);
     });

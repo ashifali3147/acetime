@@ -5,6 +5,7 @@ class Constant {
 
   static const String isUserLogin = "IS_USER_LOGIN";
   static const String fcmToken = "FCM_TOKEN";
+  static const String voipToken = "VOIP_TOKEN";
   static const String jwtToken = "JWT_TOKEN";
   static const String userName = "USER_NAME";
   static const String userModel = "USER_MODEL";

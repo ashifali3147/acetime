@@ -20,6 +20,47 @@ class ContactSyncProvider extends ChangeNotifier {
 
   String? get error => _error;
 
+  Future<bool> _ensureContactsPermission() async {
+    var status = await Permission.contacts.status;
+
+    if (status.isGranted || status.isLimited) {
+      return true;
+    }
+
+    if (status.isRestricted) {
+      _error =
+          "Contacts permission is restricted on this device. Check Screen Time or device restrictions.";
+      return false;
+    }
+
+    if (status.isPermanentlyDenied) {
+      _error =
+          "Contacts permission is permanently denied. Enable it from iPhone Settings > Acetime > Contacts.";
+      return false;
+    }
+
+    status = await Permission.contacts.request();
+
+    if (status.isGranted || status.isLimited) {
+      return true;
+    }
+
+    if (status.isPermanentlyDenied) {
+      _error =
+          "Contacts permission is permanently denied. Enable it from iPhone Settings > Acetime > Contacts.";
+      return false;
+    }
+
+    if (status.isRestricted) {
+      _error =
+          "Contacts permission is restricted on this device. Check Screen Time or device restrictions.";
+      return false;
+    }
+
+    _error = "Contacts permission denied";
+    return false;
+  }
+
   Future<void> fetchCacheContacts() async {
     _isLoading = true;
     _error = null;
@@ -48,13 +89,8 @@ class ContactSyncProvider extends ChangeNotifier {
       notifyListeners();
 
       // 2️⃣ Request device contact permission
-      var status = await Permission.contacts.status;
-      if (!status.isGranted) {
-        status = await Permission.contacts.request();
-      }
-
-      if (!status.isGranted) {
-        _error = "Contact permission denied";
+      final hasPermission = await _ensureContactsPermission();
+      if (!hasPermission) {
         _isLoading = false;
         notifyListeners();
         return;
